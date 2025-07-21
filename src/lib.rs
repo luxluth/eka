@@ -1,5 +1,7 @@
 #![doc = include_str!("../README.md")]
 
+use std::collections::HashSet;
+
 pub mod macros;
 
 #[derive(Debug, Clone, Copy)]
@@ -36,9 +38,8 @@ impl Space {
 #[derive(Debug, Clone, Copy)]
 struct Capsule {
     space_ref: usize,
-    parent_ref: usize,
+    parent_space_ref: usize,
     style_ref: usize,
-    is_dirty: bool,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -54,7 +55,7 @@ impl<'a> Frame {
     }
 
     pub fn set_dirty(&self, root: &mut Root) {
-        root.capsules[self.capsule_ref].is_dirty = true;
+        root.set_dirty(self.capsule_ref);
     }
 
     pub fn get_ref(&self) -> usize {
@@ -113,12 +114,23 @@ impl Default for Color {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Clone, Copy)]
 pub enum SizeSpec {
     Fill,
     Fit,
     Pixel(u32),
     Percent(f32),
+}
+
+impl std::fmt::Debug for SizeSpec {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            SizeSpec::Fill => write!(f, "fill"),
+            SizeSpec::Fit => write!(f, "fit"),
+            SizeSpec::Pixel(px) => write!(f, "{}px", px),
+            SizeSpec::Percent(p) => write!(f, "{}%", p * 100.0),
+        }
+    }
 }
 
 impl SizeSpec {
@@ -152,6 +164,7 @@ pub struct Root {
     pub(crate) spaces: Vec<Space>,
     pub(crate) styles: Vec<Style>,
     pub(crate) capsules: Vec<Capsule>,
+    pub(crate) dirties: HashSet<usize>,
 }
 
 impl Root {
@@ -160,6 +173,7 @@ impl Root {
             spaces: vec![Space::zero(0).with_width(width).with_height(height)],
             styles: vec![],
             capsules: vec![],
+            dirties: HashSet::new(),
         }
     }
 
@@ -179,35 +193,70 @@ impl Root {
         eprintln!("SPACE :: {space:#?}");
     }
 
-    pub fn compute(&mut self) {
-        for capsule in self.capsules.iter_mut() {
-            if capsule.is_dirty {
-                let style = self.styles[capsule.style_ref];
-                let parent = self.spaces[capsule.parent_ref];
-                let space = &mut self.spaces[capsule.space_ref];
+    pub fn debug_layout_tree_base(&self, start: usize, depth: usize) {
+        let indent = "  ".repeat(depth);
 
-                space.width = style.width.resolve_size(parent.width);
-                space.height = style.height.resolve_size(parent.height);
+        if let Some(capsule) = self.capsules.get(start) {
+            let space = self.spaces[capsule.space_ref];
+            let style = self.styles[capsule.style_ref];
 
-                space.x = parent.x + style.padding as i32;
-                space.y = parent.y + style.padding as i32;
+            eprintln!("{indent}Capsule {start}");
+            eprintln!(
+                "{indent}  Space: x={} y={} w={} h={}",
+                space.x, space.y, space.width, space.height
+            );
+            eprintln!(
+                "{indent}  Style: width={:?} height={:?} padding={}",
+                style.width, style.height, style.padding
+            );
 
-                capsule.is_dirty = false;
+            for child in self.children_of(space.id) {
+                self.debug_layout_tree_base(child, depth + 1);
             }
+        } else {
+            eprintln!("{indent}Capsule {start} not found.");
         }
     }
 
-    fn children_of(&self, parent_id: usize) -> impl Iterator<Item = usize> + '_ {
+    pub fn debug_layout_tree(&self) {
+        eprintln!(
+            "[ROOT] width={} height={}",
+            self.spaces[0].width, self.spaces[0].height
+        );
+        for (child, _) in self.capsules.iter().enumerate() {
+            self.debug_layout_tree_base(child, 1);
+        }
+    }
+
+    pub fn compute(&mut self) {
+        for caps_ref in &self.dirties {
+            let capsule = self.capsules[*caps_ref];
+            let style = self.styles[capsule.style_ref];
+            let parent = self.spaces[capsule.parent_space_ref];
+            let space = &mut self.spaces[capsule.space_ref];
+
+            space.width = style.width.resolve_size(parent.width);
+            space.height = style.height.resolve_size(parent.height);
+
+            space.x = parent.x + style.padding as i32;
+            space.y = parent.y + style.padding as i32;
+        }
+
+        self.dirties.clear();
+    }
+
+    fn children_of(&self, parent_space_ref: usize) -> Vec<usize> {
         self.capsules
             .iter()
             .enumerate()
             .filter_map(move |(i, cap)| {
-                if cap.parent_ref == parent_id {
+                if cap.parent_space_ref == parent_space_ref {
                     Some(i)
                 } else {
                     None
                 }
             })
+            .collect()
     }
 
     pub fn add_frame(&mut self) -> Frame {
@@ -221,15 +270,23 @@ impl Root {
         let caps_ref = self.capsules.len();
         let caps = Capsule {
             space_ref: new_id,
-            parent_ref: self.spaces[0].id,
+            parent_space_ref: self.spaces[0].id,
             style_ref: new_style_idx,
-            is_dirty: false,
         };
 
         self.capsules.push(caps);
 
         Frame {
             capsule_ref: caps_ref,
+        }
+    }
+
+    fn set_dirty(&mut self, capsule_ref: usize) {
+        let space_ref = self.capsules[capsule_ref].space_ref;
+        if self.dirties.insert(capsule_ref) {
+            for child in self.children_of(space_ref) {
+                self.set_dirty(child);
+            }
         }
     }
 }
