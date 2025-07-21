@@ -8,7 +8,67 @@ macro_rules! style {
             $(
                 style_mut.$field = $value;
             )*
-            $elem.update_style($root);
+            $elem.set_dirty($root);
         }
     }};
+}
+
+#[macro_export]
+macro_rules! size {
+    (fill) => {
+        $crate::SizeSpec::Fill
+    };
+    (fit) => {
+        $crate::SizeSpec::Fit
+    };
+    ($val:literal %) => {
+        $crate::SizeSpec::Percent($val as f32 / 100f32)
+    };
+    ($val:literal px) => {
+        $crate::SizeSpec::Pixel($val)
+    };
+    ($val:literal) => {
+        $crate::SizeSpec::Pixel($val)
+    };
+}
+
+#[macro_export]
+macro_rules! px {
+    ($e:expr) => {
+        $crate::SizeSpec::Pixel($e)
+    };
+}
+
+#[macro_export]
+macro_rules! color {
+    ($name:ident) => {
+        $crate::Color::$name
+    };
+    ($hex:literal) => {
+        $crate::Color::Hex($hex)
+    };
+}
+
+#[macro_export]
+macro_rules! rgb {
+    ($r:expr, $g:expr, $b:expr) => {
+        $crate::Color {
+            r: $r,
+            g: $g,
+            b: $b,
+            a: 255,
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! rgba {
+    ($r:expr, $g:expr, $b:expr, $a:expr) => {
+        $crate::Color {
+            r: $r,
+            g: $g,
+            b: $b,
+            a: $a,
+        }
+    };
 }

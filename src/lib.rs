@@ -38,23 +38,27 @@ struct Capsule {
     space_ref: usize,
     parent_ref: usize,
     style_ref: usize,
+    is_dirty: bool,
 }
 
 #[derive(Debug, Clone, Copy)]
 pub struct Frame {
-    casule_ref: usize,
+    capsule_ref: usize,
 }
 
 impl<'a> Frame {
     pub fn style_mut(&'a self, root: &'a mut Root) -> &'a mut Style {
         root.styles
-            .get_mut(root.capsules[self.casule_ref].style_ref)
+            .get_mut(root.capsules[self.capsule_ref].style_ref)
             .unwrap()
     }
 
-    pub fn update_style(&self, root: &mut Root) {
-        let style = root.styles[root.capsules[self.casule_ref].style_ref];
-        // TODO: apply to corresponding space
+    pub fn set_dirty(&self, root: &mut Root) {
+        root.capsules[self.capsule_ref].is_dirty = true;
+    }
+
+    pub fn get_ref(&self) -> usize {
+        self.capsule_ref
     }
 }
 
@@ -109,9 +113,38 @@ impl Default for Color {
     }
 }
 
+#[derive(Debug, Clone, Copy)]
+pub enum SizeSpec {
+    Fill,
+    Fit,
+    Pixel(u32),
+    Percent(f32),
+}
+
+impl SizeSpec {
+    pub(crate) fn resolve_size(&self, parent_value: u32) -> u32 {
+        match self {
+            SizeSpec::Pixel(px) => *px,
+            SizeSpec::Percent(pct) => (*pct * parent_value as f32) as u32,
+            SizeSpec::Fill => parent_value, // basic fallback
+            SizeSpec::Fit => 0,             // TODO: content-based later
+        }
+    }
+}
+
+impl Default for SizeSpec {
+    fn default() -> Self {
+        return Self::Pixel(0);
+    }
+}
+
 #[derive(Debug, Default, Clone, Copy)]
 pub struct Style {
     pub background_color: Color,
+    pub width: SizeSpec,
+    pub height: SizeSpec,
+
+    pub padding: u32,
 }
 
 #[derive(Debug)]
@@ -130,6 +163,53 @@ impl Root {
         }
     }
 
+    pub fn dbg(&self, caps_ref: usize, name: Option<&str>) {
+        if let Some(name) = name {
+            eprintln!("NAME  :: {name}");
+        }
+
+        let Some(capsule) = self.capsules.get(caps_ref) else {
+            return;
+        };
+
+        let style = self.styles[capsule.style_ref];
+        let space = self.spaces[capsule.space_ref];
+
+        eprintln!("STYLE :: {style:#?}");
+        eprintln!("SPACE :: {space:#?}");
+    }
+
+    pub fn compute(&mut self) {
+        for capsule in self.capsules.iter_mut() {
+            if capsule.is_dirty {
+                let style = self.styles[capsule.style_ref];
+                let parent = self.spaces[capsule.parent_ref];
+                let space = &mut self.spaces[capsule.space_ref];
+
+                space.width = style.width.resolve_size(parent.width);
+                space.height = style.height.resolve_size(parent.height);
+
+                space.x = parent.x + style.padding as i32;
+                space.y = parent.y + style.padding as i32;
+
+                capsule.is_dirty = false;
+            }
+        }
+    }
+
+    fn children_of(&self, parent_id: usize) -> impl Iterator<Item = usize> + '_ {
+        self.capsules
+            .iter()
+            .enumerate()
+            .filter_map(move |(i, cap)| {
+                if cap.parent_ref == parent_id {
+                    Some(i)
+                } else {
+                    None
+                }
+            })
+    }
+
     pub fn add_frame(&mut self) -> Frame {
         let new_id = self.spaces.len();
         let space = Space::zero(new_id);
@@ -143,12 +223,13 @@ impl Root {
             space_ref: new_id,
             parent_ref: self.spaces[0].id,
             style_ref: new_style_idx,
+            is_dirty: false,
         };
 
         self.capsules.push(caps);
 
         Frame {
-            casule_ref: caps_ref,
+            capsule_ref: caps_ref,
         }
     }
 }
