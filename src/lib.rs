@@ -63,12 +63,18 @@ impl<'a> Frame {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Clone, Copy)]
 pub struct Color {
     pub r: u8,
     pub g: u8,
     pub b: u8,
     pub a: u8,
+}
+
+impl std::fmt::Debug for Color {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "rgba({}, {}, {}, {})", self.r, self.g, self.b, self.a)
+    }
 }
 
 impl Color {
@@ -200,13 +206,20 @@ impl Root {
             let space = self.spaces[capsule.space_ref];
             let style = self.styles[capsule.style_ref];
 
-            eprintln!("{indent}Capsule {start}");
+            let is_child = depth != 0;
+
+            if !is_child {
+                eprintln!("{indent}Capsule {start}");
+            } else {
+                eprintln!("{indent}└ Capsule {start}");
+            }
+
             eprintln!(
-                "{indent}  Space: x={} y={} w={} h={}",
+                "{indent}  │Space: x={} y={} w={} h={}",
                 space.x, space.y, space.width, space.height
             );
             eprintln!(
-                "{indent}  Style: width={:?} height={:?} padding={}",
+                "{indent}  │Style: width={:?} height={:?} padding={}",
                 style.width, style.height, style.padding
             );
 
@@ -223,8 +236,10 @@ impl Root {
             "[ROOT] width={} height={}",
             self.spaces[0].width, self.spaces[0].height
         );
-        for (child, _) in self.capsules.iter().enumerate() {
-            self.debug_layout_tree_base(child, 1);
+        for (child, cap) in self.capsules.iter().enumerate() {
+            if cap.parent_space_ref == self.spaces[0].id {
+                self.debug_layout_tree_base(child, 1);
+            }
         }
     }
 
@@ -250,7 +265,7 @@ impl Root {
             .iter()
             .enumerate()
             .filter_map(move |(i, cap)| {
-                if cap.parent_space_ref == parent_space_ref {
+                if cap.parent_space_ref == parent_space_ref && cap.space_ref != parent_space_ref {
                     Some(i)
                 } else {
                     None
@@ -259,7 +274,7 @@ impl Root {
             .collect()
     }
 
-    pub fn add_frame(&mut self) -> Frame {
+    fn internal_add_frame(&mut self, parent_id: usize) -> Frame {
         let new_id = self.spaces.len();
         let space = Space::zero(new_id);
         self.spaces.push(space);
@@ -270,7 +285,7 @@ impl Root {
         let caps_ref = self.capsules.len();
         let caps = Capsule {
             space_ref: new_id,
-            parent_space_ref: self.spaces[0].id,
+            parent_space_ref: parent_id,
             style_ref: new_style_idx,
         };
 
@@ -279,6 +294,14 @@ impl Root {
         Frame {
             capsule_ref: caps_ref,
         }
+    }
+
+    pub fn add_frame_child(&mut self, to: &Frame) -> Frame {
+        self.internal_add_frame(self.capsules[to.capsule_ref].space_ref)
+    }
+
+    pub fn add_frame(&mut self) -> Frame {
+        self.internal_add_frame(self.spaces[0].id)
     }
 
     fn set_dirty(&mut self, capsule_ref: usize) {
