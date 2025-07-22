@@ -199,7 +199,10 @@ impl Root {
         eprintln!("SPACE :: {space:#?}");
     }
 
+    #[cfg(feature = "debug")]
     pub fn debug_layout_tree_base(&self, start: usize, depth: usize) {
+        use ansi_term::Style;
+
         let indent = "  ".repeat(depth);
 
         if let Some(capsule) = self.capsules.get(start) {
@@ -208,19 +211,44 @@ impl Root {
 
             let is_child = depth != 0;
 
+            let num_s = Style::new().dimmed().bold();
+            let dim = Style::new().dimmed();
+            let field = Style::new().fg(ansi_term::Color::Purple);
+            let field_name = Style::new().bold();
+
             if !is_child {
-                eprintln!("{indent}Capsule {start}");
+                eprintln!("{indent}Capsule({})", num_s.paint(start.to_string()));
             } else {
-                eprintln!("{indent}└ Capsule {start}");
+                eprintln!(
+                    "{indent}{}Capsule({})",
+                    dim.paint("└"),
+                    num_s.paint(start.to_string())
+                );
             }
 
             eprintln!(
-                "{indent}  │Space: x={} y={} w={} h={}",
-                space.x, space.y, space.width, space.height
+                "{indent}  {} {} .. {}={} {}={} {}={} {}={}",
+                dim.paint("│"),
+                dim.paint("Space"),
+                field_name.paint("x"),
+                field.paint(space.x.to_string()),
+                field_name.paint("y"),
+                field.paint(space.y.to_string()),
+                field_name.paint("w"),
+                field.paint(space.width.to_string()),
+                field_name.paint("h"),
+                field.paint(space.height.to_string())
             );
             eprintln!(
-                "{indent}  │Style: width={:?} height={:?} padding={}",
-                style.width, style.height, style.padding
+                "{indent}  {} {} .. {}={} {}={} {}={}",
+                dim.paint("│"),
+                dim.paint("Style"),
+                field_name.paint("width"),
+                field.paint(format!("{:?}", style.width)),
+                field_name.paint("height"),
+                field.paint(format!("{:?}", style.height)),
+                field_name.paint("padding"),
+                field.paint(format!("{}", style.padding))
             );
 
             for child in self.children_of(space.id) {
@@ -231,10 +259,16 @@ impl Root {
         }
     }
 
+    #[cfg(feature = "debug")]
     pub fn debug_layout_tree(&self) {
+        use ansi_term::Style;
+        let s = Style::new().fg(ansi_term::Color::Yellow).bold();
         eprintln!(
-            "[ROOT] width={} height={}",
-            self.spaces[0].width, self.spaces[0].height
+            "{}",
+            s.paint(format!(
+                "R ┬ {}x{}",
+                self.spaces[0].width, self.spaces[0].height
+            ))
         );
         for (child, cap) in self.capsules.iter().enumerate() {
             if cap.parent_space_ref == self.spaces[0].id {
