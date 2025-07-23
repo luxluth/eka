@@ -33,6 +33,36 @@ macro_rules! size {
 }
 
 #[macro_export]
+macro_rules! layout {
+    (flex) => {
+        $crate::LayoutStrategy::Flex
+    };
+    (grid) => {
+        $crate::LayoutStrategy::Grid
+    };
+}
+
+#[macro_export]
+macro_rules! flow {
+    (row) => {
+        $crate::Direction::Row
+    };
+    (column) => {
+        $crate::Direction::Column
+    };
+}
+
+#[macro_export]
+macro_rules! pos {
+    (auto) => {
+        $crate::Position::Auto
+    };
+    ($x:expr, $y:expr) => {
+        $crate::Position::Fixed { x: $x, y: $y }
+    };
+}
+
+#[macro_export]
 macro_rules! px {
     ($e:expr) => {
         $crate::SizeSpec::Pixel($e)

@@ -49,9 +49,10 @@ pub struct Frame {
 
 impl<'a> Frame {
     pub fn style_mut(&'a self, root: &'a mut Root) -> &'a mut Style {
-        root.styles
-            .get_mut(root.capsules[self.capsule_ref].style_ref)
-            .unwrap()
+        unsafe {
+            root.styles
+                .get_unchecked_mut(root.capsules[self.capsule_ref].style_ref)
+        }
     }
 
     pub fn set_dirty(&self, root: &mut Root) {
@@ -120,7 +121,7 @@ impl Default for Color {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq)]
 pub enum SizeSpec {
     Fill,
     Fit,
@@ -157,19 +158,49 @@ impl Default for SizeSpec {
 }
 
 #[derive(Debug, Default, Clone, Copy)]
+pub enum Direction {
+    #[default]
+    Row,
+    Column,
+}
+
+#[derive(Debug, Default, Clone, Copy)]
+pub enum LayoutStrategy {
+    #[default]
+    Flex,
+    // A later focus
+    Grid,
+}
+
+#[derive(Debug, Default, Clone, Copy)]
+pub enum Position {
+    Fixed {
+        x: u32,
+        y: u32,
+    },
+    #[default]
+    Auto,
+}
+
+#[derive(Debug, Default, Clone, Copy)]
 pub struct Style {
     pub background_color: Color,
     pub width: SizeSpec,
     pub height: SizeSpec,
 
     pub padding: u32,
+
+    pub layout: LayoutStrategy,
+    pub flow: Direction,
+    pub gap: u32,
+
+    pub position: Position,
+
+    pub z_index: u32,
 }
 
 #[derive(Debug)]
-enum Action {
-    FitToChild(usize),
-    FillToParent(usize),
-}
+enum Action {}
 
 #[derive(Debug)]
 pub struct Root {
@@ -285,18 +316,31 @@ impl Root {
         }
     }
 
+    /// Strategy
+    /// ???
     pub fn compute(&mut self) {
         for caps_ref in &self.dirties {
             let capsule = self.capsules[*caps_ref];
             let style = self.styles[capsule.style_ref];
-            let parent = self.spaces[capsule.parent_ref.unwrap_or(0)];
+            let parent_space = self.spaces[capsule.parent_ref.unwrap_or(0)];
             let space = &mut self.spaces[capsule.space_ref];
 
-            space.width = style.width.resolve_size(parent.width);
-            space.height = style.height.resolve_size(parent.height);
+            if let Some(cref) = capsule.parent_ref {
+                let parent_style = self.styles[self.capsules[cref].style_ref];
+                if parent_style.width == SizeSpec::Fit {}
+                if parent_style.height == SizeSpec::Fit {}
+            }
 
-            space.x = parent.x + style.padding as i32;
-            space.y = parent.y + style.padding as i32;
+            space.width = style.width.resolve_size(parent_space.width);
+            space.height = style.height.resolve_size(parent_space.height);
+
+            space.x = parent_space.x + style.padding as i32;
+            space.y = parent_space.y + style.padding as i32;
+        }
+
+        while let Some(action) = self.actions.pop() {
+            eprintln!("eee");
+            // applying actions
         }
 
         self.dirties.clear();
@@ -308,7 +352,7 @@ impl Root {
             .enumerate()
             .filter_map(move |(i, cap)| {
                 if cap.parent_ref.is_some() {
-                    let cref = cap.parent_ref.unwrap();
+                    let cref = unsafe { cap.parent_ref.unwrap_unchecked() };
                     if cref == parent_ref && cap.space_ref != parent_ref {
                         Some(i)
                     } else {
