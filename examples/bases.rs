@@ -23,5 +23,6 @@ fn main() {
     root.compute();
     let elapsed = now.elapsed();
     eprintln!("operation took {elapsed:?}");
+
     root.debug_layout_tree();
 }
