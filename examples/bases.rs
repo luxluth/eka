@@ -7,8 +7,8 @@ fn main() {
     let frame1 = root.add_frame();
     style!(frame1, &mut root, {
         background_color: color!(RED),
-        width: size!(fit),
-        height: size!(fit),
+        width: size!(fill),
+        height: size!(fill),
         padding: 5,
     });
 
@@ -16,7 +16,7 @@ fn main() {
     style!(frame, &mut root, {
         background_color: color!(RED),
         width: size!(fill),
-        height: size!(100),
+        height: size!(fill),
     });
 
     let now = Instant::now();
