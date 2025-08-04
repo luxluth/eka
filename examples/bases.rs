@@ -1,6 +1,6 @@
 use std::time::Instant;
 
-use heka::{Root, color, size, style};
+use heka::{Root, color, pad, size, style};
 
 fn main() {
     let mut root = Root::new(800, 600);
@@ -9,7 +9,7 @@ fn main() {
         background_color: color!(RED),
         width: size!(fill),
         height: size!(fill),
-        padding: 5,
+        padding: pad!(10, 20),
     });
 
     let frame = root.add_frame_child(&frame1);

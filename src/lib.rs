@@ -129,6 +129,16 @@ pub enum SizeSpec {
     Percent(f32),
 }
 
+impl std::ops::SubAssign for SizeSpec {
+    fn sub_assign(&mut self, rhs: Self) {
+        if self.is_pixel() && rhs.is_pixel() {
+            *self = SizeSpec::Pixel(self.get() - rhs.get());
+        } else if self.is_percent() && rhs.is_percent() {
+            *self = SizeSpec::Percent(self.percent() - rhs.percent());
+        }
+    }
+}
+
 impl std::fmt::Debug for SizeSpec {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -145,8 +155,8 @@ impl SizeSpec {
         match self {
             SizeSpec::Pixel(px) => Self::Pixel(*px),
             SizeSpec::Percent(pct) => Self::Pixel((*pct * parent_value as f32) as u32),
-            SizeSpec::Fill => Self::Pixel(parent_value), // basic fallback
-            SizeSpec::Fit => Self::Pixel(0),             // TODO: content-based later
+            SizeSpec::Fill => Self::Pixel(parent_value),
+            SizeSpec::Fit => Self::Pixel(0),
         }
     }
 
@@ -163,6 +173,32 @@ impl SizeSpec {
         match &self {
             SizeSpec::Pixel(e) => *e,
             _ => 0,
+        }
+    }
+
+    pub fn percent(&self) -> f32 {
+        match &self {
+            SizeSpec::Percent(e) => *e,
+            _ => 0.0,
+        }
+    }
+
+    #[inline]
+    fn is_fill(&self) -> bool {
+        *self == SizeSpec::Fill
+    }
+
+    fn is_pixel(&self) -> bool {
+        match self {
+            SizeSpec::Pixel(_) => true,
+            _ => false,
+        }
+    }
+
+    fn is_percent(&self) -> bool {
+        match self {
+            SizeSpec::Percent(_) => true,
+            _ => false,
         }
     }
 }
@@ -199,6 +235,69 @@ pub enum Position {
 }
 
 #[derive(Debug, Default, Clone, Copy)]
+pub struct Padding {
+    pub left: u32,
+    pub right: u32,
+    pub top: u32,
+    pub bottom: u32,
+}
+
+impl Padding {
+    pub fn new(left: u32, right: u32, top: u32, bottom: u32) -> Self {
+        Self {
+            left,
+            right,
+            top,
+            bottom,
+        }
+    }
+
+    pub fn new_all(all: u32) -> Self {
+        Self::new(all, all, all, all)
+    }
+
+    pub fn new_lr_tb(lr: u32, tb: u32) -> Self {
+        Self::new(lr, lr, tb, tb)
+    }
+}
+
+impl std::fmt::Display for Padding {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "Pad(L{}, R{}, T{}, B{})",
+            self.left, self.right, self.top, self.bottom
+        )
+    }
+}
+
+impl Padding {
+    pub fn is_zero(&self) -> bool {
+        self.left == 0 && self.right == 0 && self.top == 0 && self.bottom == 0
+    }
+
+    // #[inline]
+    // pub fn apply_left(&self, left: &mut u32) {
+    //     *left = self.left;
+    // }
+    //
+    // #[inline]
+    // pub fn apply_right(&self, right: &mut u32) {
+    //     *right = self.right;
+    // }
+    //
+    // #[inline]
+    // pub fn apply_top(&self, top: &mut u32) {
+    //     *top = self.top;
+    // }
+    //
+    // #[inline]
+    // pub fn apply_bottom(&self, bottom: &mut u32) {
+    //     *bottom = self.bottom;
+    // }
+}
+
+#[derive(Debug, Default, Clone, Copy)]
 pub struct Style {
     /// Informative style only. Depending on the Frame
     /// type, this information may be taken into consideration for
@@ -210,7 +309,7 @@ pub struct Style {
     pub height: SizeSpec,
 
     /// Padding setted for a Frame element
-    pub padding: u32,
+    pub padding: Padding,
 
     /// Define the layout to use for position children
     pub layout: LayoutStrategy,
@@ -283,36 +382,38 @@ impl Root {
         }
     }
 
+    /// PHASE 3 - Positioning
+    fn compute_position(&mut self) {
+        for caps_ref in &self.dirties {
+            let capsule = self.capsules[*caps_ref];
+            let style = self.styles[capsule.style_ref];
+            if !style.padding.is_zero() {
+                if let Some(child) = self.children_of(*caps_ref).first() {
+                    let child_capsule = self.capsules[*child];
+                    let child_style = self.styles[child_capsule.style_ref];
+                    let child_space = &mut self.spaces[child_capsule.space_ref];
+
+                    child_space.x += style.padding.left as i32;
+                    child_space.y += style.padding.top as i32;
+
+                    // end ajustements
+                    if child_style.width.is_fill() {
+                        child_space.width -=
+                            SizeSpec::Pixel(style.padding.left + style.padding.right);
+                    }
+                    if child_style.height.is_fill() {
+                        child_space.height -=
+                            SizeSpec::Pixel(style.padding.top + style.padding.bottom);
+                    }
+                }
+            }
+        }
+    }
+
     pub fn compute(&mut self) {
         self.compute_sizing();
         self.compute_size_fit();
-        // for caps_ref in &self.dirties {
-        //     let capsule = self.capsules[*caps_ref];
-        //     let style = self.styles[capsule.style_ref];
-        //     let parent_space = capsule
-        //         .parent_ref
-        //         .map_or(self.spaces[0], |s_id| self.spaces[s_id]);
-        //     let space = &mut self.spaces[capsule.space_ref];
-        //
-        //     if let Some(cref) = capsule.parent_ref {
-        //         let parent_style = self.styles[self.capsules[cref].style_ref];
-        //         if parent_style.width == SizeSpec::Fit {}
-        //         if parent_style.height == SizeSpec::Fit {}
-        //     }
-        //
-        //     space.width = style.width.resolve_size(parent_space.width);
-        //     space.height = style.height.resolve_size(parent_space.height);
-        //
-        //     space.x = parent_space.x + style.padding as i32;
-        //     space.y = parent_space.y + style.padding as i32;
-        // }
-        //
-        // while let Some(action) = self.actions.pop() {
-        //     eprintln!("eee");
-        //     // applying actions
-        // }
-        //
-        // self.dirties.clear();
+        self.compute_position();
     }
 
     fn children_of(&self, parent_ref: usize) -> Vec<usize> {

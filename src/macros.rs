@@ -102,3 +102,16 @@ macro_rules! rgba {
         }
     };
 }
+
+#[macro_export]
+macro_rules! pad {
+    ($value:expr) => {
+        $crate::Padding::new_all($value)
+    };
+    ($lr:expr, $tb:expr) => {
+        $crate::Padding::new_lr_tb($lr, $tb)
+    };
+    ($l:expr, $r:expr, $t:expr, $b:expr) => {
+        $crate::Padding::new($l, $r, $t, $b)
+    };
+}

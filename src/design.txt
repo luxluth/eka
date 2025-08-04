@@ -8,4 +8,10 @@ PHASE 2 - Size Fitting
 
 At this stage. Any element with a fit attribute may not have a defined size yet. The goal here
 is to fit each single one of the to the first
-children encountered (A better idea would be to find the child with the largest ratio).
+children encountered (A better idea would be to find the
+child with the largest ratio).
+
+PHASE 3 - Positioning
+
+Depending on the parent padding; every space is positioned according
+to the description.
