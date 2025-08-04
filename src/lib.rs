@@ -2,6 +2,7 @@
 
 use std::collections::HashSet;
 
+mod arena;
 pub mod macros;
 
 #[derive(Debug, Clone, Copy)]
@@ -43,14 +44,14 @@ struct Capsule {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct Frame<T> {
+pub struct Frame {
     capsule_ref: usize,
-    pub any: Option<T>,
+    pub data_ref: Option<usize>, // TODO: Add a custom allocator
 }
 
-pub type BoxElement = Frame<()>;
+pub type BoxElement = Frame;
 
-impl<'a, T> Frame<T> {
+impl<'a> Frame {
     pub fn style_mut(&'a self, root: &'a mut Root) -> &'a mut Style {
         unsafe {
             root.styles
@@ -436,7 +437,7 @@ impl Root {
             .collect()
     }
 
-    fn internal_add_frame<T>(&mut self, parent_ref: Option<usize>, any: Option<T>) -> Frame<T> {
+    fn internal_add_frame(&mut self, parent_ref: Option<usize>, data_ref: Option<usize>) -> Frame {
         let new_id = self.spaces.len();
         let space = Space::zero(new_id);
         self.spaces.push(space);
@@ -455,16 +456,16 @@ impl Root {
 
         Frame {
             capsule_ref: caps_ref,
-            any,
+            data_ref,
         }
     }
 
-    pub fn add_frame_child<T, U>(&mut self, to: &Frame<U>, any: Option<T>) -> Frame<T> {
-        self.internal_add_frame(Some(to.capsule_ref), any)
+    pub fn add_frame_child(&mut self, to: &Frame, data_ref: Option<usize>) -> Frame {
+        self.internal_add_frame(Some(to.capsule_ref), data_ref)
     }
 
-    pub fn add_frame<T>(&mut self, any: Option<T>) -> Frame<T> {
-        self.internal_add_frame(None, any)
+    pub fn add_frame(&mut self, data_ref: Option<usize>) -> Frame {
+        self.internal_add_frame(None, data_ref)
     }
 
     fn set_dirty(&mut self, capsule_ref: usize) {
