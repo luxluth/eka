@@ -43,11 +43,14 @@ struct Capsule {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct Frame {
+pub struct Frame<T> {
     capsule_ref: usize,
+    pub any: Option<T>,
 }
 
-impl<'a> Frame {
+pub type BoxElement = Frame<()>;
+
+impl<'a, T> Frame<T> {
     pub fn style_mut(&'a self, root: &'a mut Root) -> &'a mut Style {
         unsafe {
             root.styles
@@ -219,6 +222,7 @@ pub enum Direction {
 #[derive(Debug, Default, Clone, Copy)]
 pub enum LayoutStrategy {
     #[default]
+    NoStrategy,
     Flex,
     // A later focus
     Grid,
@@ -328,14 +332,10 @@ pub struct Style {
 }
 
 #[derive(Debug)]
-enum Action {}
-
-#[derive(Debug)]
 pub struct Root {
     pub(crate) spaces: Vec<Space>,
     pub(crate) styles: Vec<Style>,
     pub(crate) capsules: Vec<Capsule>,
-    pub(crate) actions: Vec<Action>,
     pub(crate) dirties: HashSet<usize>,
 }
 
@@ -346,7 +346,6 @@ impl Root {
             styles: vec![],
             capsules: vec![],
             dirties: HashSet::new(),
-            actions: vec![],
         }
     }
 
@@ -414,6 +413,8 @@ impl Root {
         self.compute_sizing();
         self.compute_size_fit();
         self.compute_position();
+
+        self.dirties.clear();
     }
 
     fn children_of(&self, parent_ref: usize) -> Vec<usize> {
@@ -435,7 +436,7 @@ impl Root {
             .collect()
     }
 
-    fn internal_add_frame(&mut self, parent_ref: Option<usize>) -> Frame {
+    fn internal_add_frame<T>(&mut self, parent_ref: Option<usize>, any: Option<T>) -> Frame<T> {
         let new_id = self.spaces.len();
         let space = Space::zero(new_id);
         self.spaces.push(space);
@@ -454,15 +455,16 @@ impl Root {
 
         Frame {
             capsule_ref: caps_ref,
+            any,
         }
     }
 
-    pub fn add_frame_child(&mut self, to: &Frame) -> Frame {
-        self.internal_add_frame(Some(to.capsule_ref))
+    pub fn add_frame_child<T, U>(&mut self, to: &Frame<U>, any: Option<T>) -> Frame<T> {
+        self.internal_add_frame(Some(to.capsule_ref), any)
     }
 
-    pub fn add_frame(&mut self) -> Frame {
-        self.internal_add_frame(None)
+    pub fn add_frame<T>(&mut self, any: Option<T>) -> Frame<T> {
+        self.internal_add_frame(None, any)
     }
 
     fn set_dirty(&mut self, capsule_ref: usize) {

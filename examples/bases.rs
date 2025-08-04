@@ -1,10 +1,10 @@
 use std::time::Instant;
 
-use heka::{Root, color, pad, size, style};
+use heka::{BoxElement, Root, color, pad, size, style};
 
 fn main() {
     let mut root = Root::new(800, 600);
-    let frame1 = root.add_frame();
+    let frame1: BoxElement = root.add_frame(None);
     style!(frame1, &mut root, {
         background_color: color!(RED),
         width: size!(fill),
@@ -12,7 +12,7 @@ fn main() {
         padding: pad!(10, 20),
     });
 
-    let frame = root.add_frame_child(&frame1);
+    let frame: BoxElement = root.add_frame_child(&frame1, None);
     style!(frame, &mut root, {
         background_color: color!(RED),
         width: size!(fill),
