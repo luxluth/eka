@@ -2,6 +2,8 @@
 
 use std::collections::HashSet;
 
+use crate::arena::Arena;
+
 mod arena;
 pub mod macros;
 
@@ -41,12 +43,12 @@ struct Capsule {
     space_ref: usize,
     parent_ref: Option<usize>,
     style_ref: usize,
+    data_ref: Option<usize>,
 }
 
 #[derive(Debug, Clone, Copy)]
 pub struct Frame {
     capsule_ref: usize,
-    pub data_ref: Option<usize>, // TODO: Add a custom allocator
 }
 
 pub type BoxElement = Frame;
@@ -338,6 +340,7 @@ pub struct Root {
     pub(crate) styles: Vec<Style>,
     pub(crate) capsules: Vec<Capsule>,
     pub(crate) dirties: HashSet<usize>,
+    pub(crate) arena: Arena,
 }
 
 impl Root {
@@ -347,6 +350,7 @@ impl Root {
             styles: vec![],
             capsules: vec![],
             dirties: HashSet::new(),
+            arena: Arena::new(),
         }
     }
 
@@ -437,6 +441,14 @@ impl Root {
             .collect()
     }
 
+    pub fn set_binding<T>(&mut self, data: T) -> usize {
+        self.arena.alloc(data)
+    }
+
+    pub fn get_binding<T>(&self, index: usize) -> &mut T {
+        self.arena.get(index)
+    }
+
     fn internal_add_frame(&mut self, parent_ref: Option<usize>, data_ref: Option<usize>) -> Frame {
         let new_id = self.spaces.len();
         let space = Space::zero(new_id);
@@ -450,13 +462,13 @@ impl Root {
             space_ref: new_id,
             parent_ref,
             style_ref: new_style_idx,
+            data_ref,
         };
 
         self.capsules.push(caps);
 
         Frame {
             capsule_ref: caps_ref,
-            data_ref,
         }
     }
 
