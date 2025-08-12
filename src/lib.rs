@@ -8,8 +8,7 @@ mod arena;
 pub mod macros;
 
 #[derive(Debug, Clone, Copy)]
-struct Space {
-    pub id: usize,
+pub(crate) struct Space {
     pub x: i32,
     pub y: i32,
     pub width: SizeSpec,
@@ -17,9 +16,8 @@ struct Space {
 }
 
 impl Space {
-    pub fn zero(id: usize) -> Self {
+    pub fn zero() -> Self {
         Self {
-            id,
             x: 0,
             y: 0,
             width: SizeSpec::Pixel(0),
@@ -70,6 +68,7 @@ impl<'a> Frame {
     }
 }
 
+/// RGBA defined color values
 #[derive(Clone, Copy)]
 pub struct Color {
     pub r: u8,
@@ -85,18 +84,21 @@ impl std::fmt::Debug for Color {
 }
 
 impl Color {
+    /// Red color
     pub const RED: Color = Color {
         r: 255,
         g: 0,
         b: 0,
         a: 255,
     };
+    /// White color
     pub const WHITE: Color = Color {
         r: 255,
         g: 255,
         b: 255,
         a: 255,
     };
+    /// DodgerBlue - a nice color
     pub const DODGER_BLUE: Color = Color {
         r: 30,
         g: 144,
@@ -104,7 +106,8 @@ impl Color {
         a: 255,
     };
 
-    /// FORMAT: RRGGBBAA
+    /// Transform raw hex into RGBA componnent
+    /// **FORMAT: RRGGBBAA**
     #[allow(non_snake_case)]
     pub const fn Hex(hex: u32) -> Color {
         let r = ((hex >> (8 * 3)) & 0xFF) as u8;
@@ -115,6 +118,7 @@ impl Color {
         Color { r, g, b, a }
     }
 
+    /// Set an alpha value for the color
     pub fn with_alpha(mut self, value: u8) -> Self {
         self.a = value;
         self
@@ -127,11 +131,22 @@ impl Default for Color {
     }
 }
 
+/// Define dimension specification for a given element.
+/// These specification can either be dynamic or fixed.
+/// fill | fit | ..px | ..%
 #[derive(Clone, Copy, PartialEq)]
 pub enum SizeSpec {
+    /// **fill** represents the an element that wishes to fill up
+    /// any remaining space in th parent
     Fill,
+    /// **fit**, applyed to this element will grow or shrink to accomodate
+    /// its children.
     Fit,
+    /// **pixel** define a precise measure taken by this element
+    /// this is the only precise unit of them all.
     Pixel(u32),
+    /// **percent**, a value starting by 0..1 - 0.0 being 0% and 1.0 is 100%.
+    /// It takes the size of the parent and multiplies it by the defined scalar
     Percent(f32),
 }
 
@@ -343,10 +358,32 @@ pub struct Root {
     pub(crate) arena: Arena,
 }
 
+impl std::ops::Index<Capsule> for Vec<Style> {
+    type Output = Style;
+
+    fn index(&self, index: Capsule) -> &Self::Output {
+        unsafe { self.get_unchecked(index.style_ref) }
+    }
+}
+
+impl std::ops::Index<Capsule> for Vec<Space> {
+    type Output = Space;
+
+    fn index(&self, index: Capsule) -> &Self::Output {
+        unsafe { self.get_unchecked(index.space_ref) }
+    }
+}
+
+impl std::ops::IndexMut<Capsule> for Vec<Space> {
+    fn index_mut(&mut self, index: Capsule) -> &mut Self::Output {
+        unsafe { self.get_unchecked_mut(index.space_ref) }
+    }
+}
+
 impl Root {
     pub fn new(width: u32, height: u32) -> Self {
         Self {
-            spaces: vec![Space::zero(0).with_width(width).with_height(height)],
+            spaces: vec![Space::zero().with_width(width).with_height(height)],
             styles: vec![],
             capsules: vec![],
             dirties: HashSet::new(),
@@ -354,72 +391,34 @@ impl Root {
         }
     }
 
-    /// PHASE 1 - First Sizing Pass
-    fn compute_sizing(&mut self) {
-        for caps_ref in &self.dirties {
-            let capsule = self.capsules[*caps_ref];
-            let style = self.styles[capsule.style_ref];
-            let parent_space = capsule
-                .parent_ref
-                .map_or(self.spaces[0], |s_id| self.spaces[s_id]);
-            let space = &mut self.spaces[capsule.space_ref];
-
-            space.width = style.width.resolve_size(parent_space.width.get());
-            space.height = style.height.resolve_size(parent_space.height.get());
-        }
-    }
-
-    /// PHASE 2 - Size Fitting
-    fn compute_size_fit(&mut self) {
-        for caps_ref in &self.dirties {
-            let capsule = self.capsules[*caps_ref];
-            let style = self.styles[capsule.style_ref];
-            if style.width.is_fit() {
-                if let Some(child) = self.children_of(*caps_ref).first() {
-                    let child_capsule = self.capsules[*child];
-                    let child_space = self.spaces[child_capsule.space_ref];
-                    let space = &mut self.spaces[capsule.space_ref];
-                    space.width = child_space.width;
-                    space.height = child_space.height;
-                }
-            }
-        }
-    }
-
-    /// PHASE 3 - Positioning
-    fn compute_position(&mut self) {
-        for caps_ref in &self.dirties {
-            let capsule = self.capsules[*caps_ref];
-            let style = self.styles[capsule.style_ref];
-            if !style.padding.is_zero() {
-                if let Some(child) = self.children_of(*caps_ref).first() {
-                    let child_capsule = self.capsules[*child];
-                    let child_style = self.styles[child_capsule.style_ref];
-                    let child_space = &mut self.spaces[child_capsule.space_ref];
-
-                    child_space.x += style.padding.left as i32;
-                    child_space.y += style.padding.top as i32;
-
-                    // end ajustements
-                    if child_style.width.is_fill() {
-                        child_space.width -=
-                            SizeSpec::Pixel(style.padding.left + style.padding.right);
-                    }
-                    if child_style.height.is_fill() {
-                        child_space.height -=
-                            SizeSpec::Pixel(style.padding.top + style.padding.bottom);
-                    }
-                }
-            }
+    /// This will take into account the layout strategy used by this specific
+    /// parent to compute all the remaining children positions. And once it's
+    /// complete, the compute will move on to each child element
+    ///
+    /// Since the parent is always defined before the children we'll make a
+    /// lot of asumptions about the state of the code
+    fn compute_frame(&mut self, frame: usize, _children: &Vec<usize>) {
+        let parent_caps = self.capsules[frame];
+        let style = self.styles[parent_caps];
+        match style.layout {
+            LayoutStrategy::NoStrategy => {}
+            LayoutStrategy::Flex => {}
+            s => todo!("impl {s:?}"),
         }
     }
 
     pub fn compute(&mut self) {
-        self.compute_sizing();
-        self.compute_size_fit();
-        self.compute_position();
+        while !self.dirties.is_empty() {
+            let computing_frame = self.dirties.drain().next().unwrap();
+            let children = self.children_of(computing_frame);
+            for child in &children {
+                self.dirties.remove(child);
+            }
 
-        self.dirties.clear();
+            self.compute_frame(computing_frame, &children);
+
+            self.dirties.clear();
+        }
     }
 
     fn children_of(&self, parent_ref: usize) -> Vec<usize> {
@@ -441,17 +440,25 @@ impl Root {
             .collect()
     }
 
+    pub fn get_binding_for_frame<T>(&mut self, frame: &Frame) -> Option<&mut T> {
+        if let Some(data_idx) = self.capsules[frame.capsule_ref].data_ref {
+            return self.arena.get(data_idx);
+        } else {
+            None
+        }
+    }
+
     pub fn set_binding<T>(&mut self, data: T) -> usize {
         self.arena.alloc(data)
     }
 
-    pub fn get_binding<T>(&self, index: usize) -> &mut T {
+    pub fn get_binding<T>(&self, index: usize) -> Option<&mut T> {
         self.arena.get(index)
     }
 
     fn internal_add_frame(&mut self, parent_ref: Option<usize>, data_ref: Option<usize>) -> Frame {
         let new_id = self.spaces.len();
-        let space = Space::zero(new_id);
+        let space = Space::zero();
         self.spaces.push(space);
 
         let new_style_idx = self.styles.len();

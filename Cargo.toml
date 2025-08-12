@@ -6,6 +6,7 @@ edition = "2024"
 [dependencies]
 ansi_term = { version = "0.12.1", optional = true }
 bumpalo = { version = "3.19.0", features = ["std"] }
+smallvec = "1.15.1"
 
 [features]
 default = ["debug"]
