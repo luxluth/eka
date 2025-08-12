@@ -11,8 +11,8 @@ pub mod macros;
 pub(crate) struct Space {
     pub x: i32,
     pub y: i32,
-    pub width: SizeSpec,
-    pub height: SizeSpec,
+    pub width: Option<u32>,
+    pub height: Option<u32>,
 }
 
 impl Space {
@@ -20,18 +20,18 @@ impl Space {
         Self {
             x: 0,
             y: 0,
-            width: SizeSpec::Pixel(0),
-            height: SizeSpec::Pixel(0),
+            width: None,
+            height: None,
         }
     }
 
     pub fn with_width(mut self, width: u32) -> Self {
-        self.width = SizeSpec::Pixel(width);
+        self.width = Some(width);
         self
     }
 
     pub fn with_height(mut self, height: u32) -> Self {
-        self.height = SizeSpec::Pixel(height);
+        self.height = Some(height);
         self
     }
 }
@@ -172,12 +172,12 @@ impl std::fmt::Debug for SizeSpec {
 }
 
 impl SizeSpec {
-    pub(crate) fn resolve_size(&self, parent_value: u32) -> SizeSpec {
+    pub(crate) fn resolve_size(&self, parent_value: u32) -> Option<u32> {
         match self {
-            SizeSpec::Pixel(px) => Self::Pixel(*px),
-            SizeSpec::Percent(pct) => Self::Pixel((*pct * parent_value as f32) as u32),
-            SizeSpec::Fill => Self::Pixel(parent_value),
-            SizeSpec::Fit => Self::Pixel(0),
+            SizeSpec::Pixel(px) => Some(*px),
+            SizeSpec::Percent(pct) => Some((*pct * parent_value as f32) as u32),
+            SizeSpec::Fill => Some(parent_value),
+            SizeSpec::Fit => None,
         }
     }
 
@@ -564,8 +564,8 @@ impl Root {
             "{}",
             s.paint(format!(
                 "R ┬ {}x{}",
-                self.spaces[0].width.get(),
-                self.spaces[0].height.get()
+                self.spaces[0].width.unwrap_or(0),
+                self.spaces[0].height.unwrap_or(0)
             ))
         );
         for (child, cap) in self.capsules.iter().enumerate() {

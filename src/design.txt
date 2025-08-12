@@ -1,26 +1,3 @@
-PHASE 1 - First Sizing Pass
-
-For now, we don't care about elements position.
-Each element in the pseudo-tree of entities will
-be size according to their description.
-
-PHASE 2 - Size Fitting
-
-At this stage. Any element with a fit attribute may not have a defined size yet. The goal here
-is to fit each single one of the to the first
-children encountered (A better idea would be to find the
-child with the largest ratio).
-
-PHASE 3 - Positioning
-
-Depending on the parent padding; every space is positioned according
-to the description.
-
-
-
-
-
-
 = COMPUTE METHOD STRATEGY
 
 For now the computing is really poorly designed
