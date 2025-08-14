@@ -1,6 +1,6 @@
 #![doc = include_str!("../README.md")]
 
-use std::collections::HashSet;
+use std::collections::{HashSet, VecDeque};
 
 use crate::{
     arena::Arena,
@@ -28,17 +28,44 @@ enum Request {
 
 #[derive(Debug)]
 struct Action {
+    requester: CapsuleRef,
     requests: SmallVec<[Request; 4]>,
 }
 
 #[derive(Debug)]
 struct RequestSolver {
-    actions: Vec<Action>,
+    actions: VecDeque<Action>,
 }
 
 impl RequestSolver {
     pub fn new() -> Self {
-        RequestSolver { actions: vec![] }
+        RequestSolver {
+            actions: VecDeque::new(),
+        }
+    }
+
+    pub fn resolve(&mut self, root: &mut Root) {
+        while !self.actions.is_empty() {
+            let this_action = self.actions.pop_front().unwrap();
+            let this_requester = root.capsules[this_action.requester];
+
+            for req in &this_action.requests {
+                match req {
+                    Request::Parent(request_bending) => match request_bending {
+                        RequestBending::W => {}
+                        RequestBending::H => {}
+                        RequestBending::L => {}
+                        RequestBending::R => {}
+                    },
+                    Request::Child(request_bending) => match request_bending {
+                        RequestBending::W => {}
+                        RequestBending::H => {}
+                        RequestBending::L => {}
+                        RequestBending::R => {}
+                    },
+                }
+            }
+        }
     }
 }
 
