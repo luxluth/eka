@@ -1,3 +1,5 @@
+#![allow(non_upper_case_globals)]
+
 /// RGBA defined color values
 #[derive(Clone, Copy)]
 pub struct Color {
@@ -15,21 +17,21 @@ impl std::fmt::Debug for Color {
 
 impl Color {
     /// Red color
-    pub const RED: Color = Color {
+    pub const red: Color = Color {
         r: 255,
         g: 0,
         b: 0,
         a: 255,
     };
     /// White color
-    pub const WHITE: Color = Color {
+    pub const white: Color = Color {
         r: 255,
         g: 255,
         b: 255,
         a: 255,
     };
     /// DodgerBlue - a nice color
-    pub const DODGER_BLUE: Color = Color {
+    pub const dodger_blue: Color = Color {
         r: 30,
         g: 144,
         b: 255,

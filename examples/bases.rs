@@ -6,7 +6,7 @@ fn main() {
     let mut root = Root::new(800, 600);
     let frame1: BoxElement = root.add_frame(None);
     style!(frame1, &mut root, {
-        background_color: color!(RED),
+        background_color: color!(red),
         width: size!(fill),
         height: size!(fill),
         padding: pad!(10, 20),
@@ -14,7 +14,7 @@ fn main() {
 
     let frame: BoxElement = root.add_frame_child(&frame1, None);
     style!(frame, &mut root, {
-        background_color: color!(RED),
+        background_color: color!(red),
         width: size!(fill),
         height: size!(fill),
     });
