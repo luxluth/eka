@@ -2,10 +2,45 @@
 
 use std::collections::HashSet;
 
-use crate::arena::Arena;
+use crate::{
+    arena::Arena,
+    color::Color,
+    position::{Direction, LayoutStrategy, Position},
+    sizing::{Padding, SizeSpec},
+};
+use smallvec::SmallVec;
 
 mod arena;
+pub mod color;
 pub mod macros;
+pub mod position;
+pub mod sizing;
+
+#[rustfmt::skip]
+#[derive(Debug, Clone, Copy)]
+enum RequestBending { W, H, L, R }
+
+#[derive(Debug, Clone, Copy)]
+enum Request {
+    Parent(RequestBending),
+    Child(RequestBending),
+}
+
+#[derive(Debug)]
+struct Action {
+    requests: SmallVec<[Request; 4]>,
+}
+
+#[derive(Debug)]
+struct RequestSolver {
+    actions: Vec<Action>,
+}
+
+impl RequestSolver {
+    pub fn new() -> Self {
+        RequestSolver { actions: vec![] }
+    }
+}
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct Space {
@@ -36,6 +71,9 @@ impl Space {
     }
 }
 
+pub type CapsuleRef = usize;
+pub type DataRef = usize;
+
 #[derive(Debug, Clone, Copy)]
 struct Capsule {
     space_ref: usize,
@@ -46,7 +84,7 @@ struct Capsule {
 
 #[derive(Debug, Clone, Copy)]
 pub struct Frame {
-    capsule_ref: usize,
+    capsule_ref: CapsuleRef,
 }
 
 pub type BoxElement = Frame;
@@ -66,257 +104,6 @@ impl<'a> Frame {
     pub fn get_ref(&self) -> usize {
         self.capsule_ref
     }
-}
-
-/// RGBA defined color values
-#[derive(Clone, Copy)]
-pub struct Color {
-    pub r: u8,
-    pub g: u8,
-    pub b: u8,
-    pub a: u8,
-}
-
-impl std::fmt::Debug for Color {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "rgba({}, {}, {}, {})", self.r, self.g, self.b, self.a)
-    }
-}
-
-impl Color {
-    /// Red color
-    pub const RED: Color = Color {
-        r: 255,
-        g: 0,
-        b: 0,
-        a: 255,
-    };
-    /// White color
-    pub const WHITE: Color = Color {
-        r: 255,
-        g: 255,
-        b: 255,
-        a: 255,
-    };
-    /// DodgerBlue - a nice color
-    pub const DODGER_BLUE: Color = Color {
-        r: 30,
-        g: 144,
-        b: 255,
-        a: 255,
-    };
-
-    /// Transform raw hex into RGBA componnent
-    /// **FORMAT: RRGGBBAA**
-    #[allow(non_snake_case)]
-    pub const fn Hex(hex: u32) -> Color {
-        let r = ((hex >> (8 * 3)) & 0xFF) as u8;
-        let g = ((hex >> (8 * 2)) & 0xFF) as u8;
-        let b = ((hex >> (8 * 1)) & 0xFF) as u8;
-        let a = ((hex >> (8 * 0)) & 0xFF) as u8;
-
-        Color { r, g, b, a }
-    }
-
-    /// Set an alpha value for the color
-    pub fn with_alpha(mut self, value: u8) -> Self {
-        self.a = value;
-        self
-    }
-}
-
-impl Default for Color {
-    fn default() -> Self {
-        Color::Hex(0xFFFFFFFF)
-    }
-}
-
-/// Define dimension specification for a given element.
-/// These specification can either be dynamic or fixed.
-/// fill | fit | ..px | ..%
-#[derive(Clone, Copy, PartialEq)]
-pub enum SizeSpec {
-    /// **fill** represents the an element that wishes to fill up
-    /// any remaining space in th parent
-    Fill,
-    /// **fit**, applyed to this element will grow or shrink to accomodate
-    /// its children.
-    Fit,
-    /// **pixel** define a precise measure taken by this element
-    /// this is the only precise unit of them all.
-    Pixel(u32),
-    /// **percent**, a value starting by 0..1 - 0.0 being 0% and 1.0 is 100%.
-    /// It takes the size of the parent and multiplies it by the defined scalar
-    Percent(f32),
-}
-
-impl std::ops::SubAssign for SizeSpec {
-    fn sub_assign(&mut self, rhs: Self) {
-        if self.is_pixel() && rhs.is_pixel() {
-            *self = SizeSpec::Pixel(self.get() - rhs.get());
-        } else if self.is_percent() && rhs.is_percent() {
-            *self = SizeSpec::Percent(self.percent() - rhs.percent());
-        }
-    }
-}
-
-impl std::fmt::Debug for SizeSpec {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            SizeSpec::Fill => write!(f, "fill"),
-            SizeSpec::Fit => write!(f, "fit"),
-            SizeSpec::Pixel(px) => write!(f, "{}px", px),
-            SizeSpec::Percent(p) => write!(f, "{}%", p * 100.0),
-        }
-    }
-}
-
-impl SizeSpec {
-    pub(crate) fn resolve_size(&self, parent_value: u32) -> Option<u32> {
-        match self {
-            SizeSpec::Pixel(px) => Some(*px),
-            SizeSpec::Percent(pct) => Some((*pct * parent_value as f32) as u32),
-            SizeSpec::Fill => Some(parent_value),
-            SizeSpec::Fit => None,
-        }
-    }
-
-    #[inline]
-    fn is_fit(&self) -> bool {
-        *self == SizeSpec::Fit
-    }
-
-    pub fn area(&self, other_spec: &SizeSpec) -> u32 {
-        self.get() * other_spec.get()
-    }
-
-    pub fn get(&self) -> u32 {
-        match &self {
-            SizeSpec::Pixel(e) => *e,
-            _ => 0,
-        }
-    }
-
-    pub fn percent(&self) -> f32 {
-        match &self {
-            SizeSpec::Percent(e) => *e,
-            _ => 0.0,
-        }
-    }
-
-    #[inline]
-    fn is_fill(&self) -> bool {
-        *self == SizeSpec::Fill
-    }
-
-    fn is_pixel(&self) -> bool {
-        match self {
-            SizeSpec::Pixel(_) => true,
-            _ => false,
-        }
-    }
-
-    fn is_percent(&self) -> bool {
-        match self {
-            SizeSpec::Percent(_) => true,
-            _ => false,
-        }
-    }
-}
-
-impl Default for SizeSpec {
-    fn default() -> Self {
-        return Self::Pixel(0);
-    }
-}
-
-#[derive(Debug, Default, Clone, Copy)]
-pub enum Direction {
-    #[default]
-    Row,
-    Column,
-}
-
-#[derive(Debug, Default, Clone, Copy)]
-pub enum LayoutStrategy {
-    #[default]
-    NoStrategy,
-    Flex,
-    // A later focus
-    Grid,
-}
-
-#[derive(Debug, Default, Clone, Copy)]
-pub enum Position {
-    Fixed {
-        x: u32,
-        y: u32,
-    },
-    #[default]
-    Auto,
-}
-
-#[derive(Debug, Default, Clone, Copy)]
-pub struct Padding {
-    pub left: u32,
-    pub right: u32,
-    pub top: u32,
-    pub bottom: u32,
-}
-
-impl Padding {
-    pub fn new(left: u32, right: u32, top: u32, bottom: u32) -> Self {
-        Self {
-            left,
-            right,
-            top,
-            bottom,
-        }
-    }
-
-    pub fn new_all(all: u32) -> Self {
-        Self::new(all, all, all, all)
-    }
-
-    pub fn new_lr_tb(lr: u32, tb: u32) -> Self {
-        Self::new(lr, lr, tb, tb)
-    }
-}
-
-impl std::fmt::Display for Padding {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "Pad(L{}, R{}, T{}, B{})",
-            self.left, self.right, self.top, self.bottom
-        )
-    }
-}
-
-impl Padding {
-    pub fn is_zero(&self) -> bool {
-        self.left == 0 && self.right == 0 && self.top == 0 && self.bottom == 0
-    }
-
-    // #[inline]
-    // pub fn apply_left(&self, left: &mut u32) {
-    //     *left = self.left;
-    // }
-    //
-    // #[inline]
-    // pub fn apply_right(&self, right: &mut u32) {
-    //     *right = self.right;
-    // }
-    //
-    // #[inline]
-    // pub fn apply_top(&self, top: &mut u32) {
-    //     *top = self.top;
-    // }
-    //
-    // #[inline]
-    // pub fn apply_bottom(&self, bottom: &mut u32) {
-    //     *bottom = self.bottom;
-    // }
 }
 
 #[derive(Debug, Default, Clone, Copy)]
@@ -354,7 +141,10 @@ pub struct Root {
     pub(crate) spaces: Vec<Space>,
     pub(crate) styles: Vec<Style>,
     pub(crate) capsules: Vec<Capsule>,
+
     pub(crate) dirties: HashSet<usize>,
+
+    pub(crate) solver: RequestSolver,
     pub(crate) arena: Arena,
 }
 
@@ -387,6 +177,7 @@ impl Root {
             styles: vec![],
             capsules: vec![],
             dirties: HashSet::new(),
+            solver: RequestSolver::new(),
             arena: Arena::new(),
         }
     }
@@ -397,7 +188,7 @@ impl Root {
     ///
     /// Since the parent is always defined before the children we'll make a
     /// lot of asumptions about the state of the code
-    fn compute_frame(&mut self, frame: usize, _children: &Vec<usize>) {
+    fn compute_frame(&mut self, frame: CapsuleRef, _children: &Vec<CapsuleRef>) {
         let parent_caps = self.capsules[frame];
         let style = self.styles[parent_caps];
         match style.layout {
@@ -421,7 +212,7 @@ impl Root {
         }
     }
 
-    fn children_of(&self, parent_ref: usize) -> Vec<usize> {
+    fn children_of(&self, parent_ref: CapsuleRef) -> Vec<CapsuleRef> {
         self.capsules
             .iter()
             .enumerate()
@@ -448,15 +239,19 @@ impl Root {
         }
     }
 
-    pub fn set_binding<T>(&mut self, data: T) -> usize {
+    pub fn set_binding<T>(&mut self, data: T) -> DataRef {
         self.arena.alloc(data)
     }
 
-    pub fn get_binding<T>(&self, index: usize) -> Option<&mut T> {
+    pub fn get_binding<T>(&self, index: DataRef) -> Option<&mut T> {
         self.arena.get(index)
     }
 
-    fn internal_add_frame(&mut self, parent_ref: Option<usize>, data_ref: Option<usize>) -> Frame {
+    fn internal_add_frame(
+        &mut self,
+        parent_ref: Option<CapsuleRef>,
+        data: Option<DataRef>,
+    ) -> Frame {
         let new_id = self.spaces.len();
         let space = Space::zero();
         self.spaces.push(space);
@@ -469,7 +264,7 @@ impl Root {
             space_ref: new_id,
             parent_ref,
             style_ref: new_style_idx,
-            data_ref,
+            data_ref: data,
         };
 
         self.capsules.push(caps);
@@ -479,17 +274,17 @@ impl Root {
         }
     }
 
-    pub fn add_frame_child(&mut self, to: &Frame, data_ref: Option<usize>) -> Frame {
-        self.internal_add_frame(Some(to.capsule_ref), data_ref)
+    pub fn add_frame_child(&mut self, to: &Frame, data: Option<DataRef>) -> Frame {
+        self.internal_add_frame(Some(to.capsule_ref), data)
     }
 
-    pub fn add_frame(&mut self, data_ref: Option<usize>) -> Frame {
-        self.internal_add_frame(None, data_ref)
+    pub fn add_frame(&mut self, data: Option<DataRef>) -> Frame {
+        self.internal_add_frame(None, data)
     }
 
-    fn set_dirty(&mut self, capsule_ref: usize) {
-        let space_ref = self.capsules[capsule_ref].space_ref;
-        if self.dirties.insert(capsule_ref) {
+    fn set_dirty(&mut self, capsule: CapsuleRef) {
+        let space_ref = self.capsules[capsule].space_ref;
+        if self.dirties.insert(capsule) {
             for child in self.children_of(space_ref) {
                 self.set_dirty(child);
             }
@@ -497,7 +292,7 @@ impl Root {
     }
 
     #[cfg(feature = "debug")]
-    pub fn debug_layout_tree_base(&self, cref: usize, depth: usize) {
+    pub fn debug_layout_tree_base(&self, cref: CapsuleRef, depth: usize) {
         use ansi_term::Style;
 
         let indent = "  ".repeat(depth);

@@ -16,66 +16,66 @@ macro_rules! style {
 #[macro_export]
 macro_rules! size {
     (fill) => {
-        $crate::SizeSpec::Fill
+        $crate::sizing::SizeSpec::Fill
     };
     (fit) => {
-        $crate::SizeSpec::Fit
+        $crate::sizing::SizeSpec::Fit
     };
     ($val:literal %) => {
-        $crate::SizeSpec::Percent($val as f32 / 100f32)
+        $crate::sizing::SizeSpec::Percent($val as f32 / 100f32)
     };
     ($val:literal px) => {
-        $crate::SizeSpec::Pixel($val)
+        $crate::sizing::SizeSpec::Pixel($val)
     };
     ($val:literal) => {
-        $crate::SizeSpec::Pixel($val)
+        $crate::sizing::SizeSpec::Pixel($val)
     };
 }
 
 #[macro_export]
 macro_rules! layout {
     (flex) => {
-        $crate::LayoutStrategy::Flex
+        $crate::position::LayoutStrategy::Flex
     };
     (grid) => {
-        $crate::LayoutStrategy::Grid
+        $crate::position::LayoutStrategy::Grid
     };
 }
 
 #[macro_export]
 macro_rules! flow {
     (row) => {
-        $crate::Direction::Row
+        $crate::position::Direction::Row
     };
     (column) => {
-        $crate::Direction::Column
+        $crate::position::Direction::Column
     };
 }
 
 #[macro_export]
 macro_rules! pos {
     (auto) => {
-        $crate::Position::Auto
+        $crate::position::Position::Auto
     };
     ($x:expr, $y:expr) => {
-        $crate::Position::Fixed { x: $x, y: $y }
+        $crate::position::Position::Fixed { x: $x, y: $y }
     };
 }
 
 #[macro_export]
 macro_rules! px {
     ($e:expr) => {
-        $crate::SizeSpec::Pixel($e)
+        $crate::sizing::SizeSpec::Pixel($e)
     };
 }
 
 #[macro_export]
 macro_rules! color {
     ($name:ident) => {
-        $crate::Color::$name
+        $crate::color::Color::$name
     };
     ($hex:literal) => {
-        $crate::Color::Hex($hex)
+        $crate::color::Color::Hex($hex)
     };
 }
 
@@ -106,12 +106,12 @@ macro_rules! rgba {
 #[macro_export]
 macro_rules! pad {
     ($value:expr) => {
-        $crate::Padding::new_all($value)
+        $crate::sizing::Padding::new_all($value)
     };
     ($lr:expr, $tb:expr) => {
-        $crate::Padding::new_lr_tb($lr, $tb)
+        $crate::sizing::Padding::new_lr_tb($lr, $tb)
     };
     ($l:expr, $r:expr, $t:expr, $b:expr) => {
-        $crate::Padding::new($l, $r, $t, $b)
+        $crate::sizing::Padding::new($l, $r, $t, $b)
     };
 }
