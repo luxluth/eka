@@ -18,12 +18,18 @@ pub mod sizing;
 
 #[rustfmt::skip]
 #[derive(Debug, Clone, Copy)]
-enum RequestBending { W, H, L, R }
+enum RequestBending { W, H, T, L }
+
+#[derive(Debug, Clone, Copy)]
+enum RequestReason {
+    Fit,
+    Fill,
+}
 
 #[derive(Debug, Clone, Copy)]
 enum Request {
-    Parent(RequestBending),
-    Child(RequestBending),
+    Parent(RequestBending, RequestReason),
+    Child(RequestBending, RequestReason),
 }
 
 #[derive(Debug)]
@@ -50,18 +56,82 @@ impl RequestSolver {
             let this_requester = root.capsules[this_action.requester];
 
             for req in &this_action.requests {
+                // The current children is asking for it parent w
+                let parent_cap = {
+                    if let Some(parent_ref) = this_requester.parent_ref {
+                        root.spaces[root.capsules[parent_ref].space_ref]
+                    } else {
+                        root.spaces[0]
+                    }
+                };
+                let parent_style = {
+                    if let Some(parent_ref) = this_requester.parent_ref {
+                        Some(root.styles[root.capsules[parent_ref].space_ref])
+                    } else {
+                        None
+                    }
+                };
                 match req {
-                    Request::Parent(request_bending) => match request_bending {
-                        RequestBending::W => {}
-                        RequestBending::H => {}
-                        RequestBending::L => {}
-                        RequestBending::R => {}
+                    Request::Parent(request_bending, reason) => match request_bending {
+                        RequestBending::W => {
+                            let requester_space = &mut root.spaces[this_requester];
+
+                            match reason {
+                                RequestReason::Fit => {
+                                    unreachable!("A child should not fit its parent")
+                                }
+                                RequestReason::Fill => {
+                                    requester_space.width = Some(parent_cap.width.unwrap());
+                                }
+                            }
+
+                            if let Some(parent_style) = parent_style {
+                                let mut base_height = requester_space.height.unwrap_or(0);
+                                base_height -= parent_style.padding.top;
+                                base_height -= parent_style.padding.bottom;
+                                requester_space.height = Some(base_height);
+                            }
+                        }
+                        RequestBending::H => {
+                            let requester_space = &mut root.spaces[this_requester];
+
+                            match reason {
+                                RequestReason::Fit => {
+                                    unreachable!("A child should not fit its parent")
+                                }
+                                RequestReason::Fill => {
+                                    requester_space.height = Some(parent_cap.height.unwrap());
+                                }
+                            }
+
+                            if let Some(parent_style) = parent_style {
+                                let mut base_height = requester_space.height.unwrap_or(0);
+                                base_height -= parent_style.padding.top;
+                                base_height -= parent_style.padding.bottom;
+                                requester_space.height = Some(base_height);
+                            }
+                        }
+                        RequestBending::T => {
+                            if let Some(parent_style) = parent_style {
+                                let requester_space = &mut root.spaces[this_requester];
+                                requester_space.y += parent_style.padding.top as i32;
+                            }
+                        }
+                        RequestBending::L => {
+                            if let Some(parent_style) = parent_style {
+                                let requester_space = &mut root.spaces[this_requester];
+                                requester_space.x += parent_style.padding.top as i32;
+                            }
+                        }
                     },
-                    Request::Child(request_bending) => match request_bending {
-                        RequestBending::W => {}
+                    Request::Child(request_bending, _reason) => match request_bending {
+                        RequestBending::W => {
+                            // The current requester is a parent and is
+                            // waiting for the child width
+                        }
                         RequestBending::H => {}
+                        RequestBending::T => {}
                         RequestBending::L => {}
-                        RequestBending::R => {}
                     },
                 }
             }
