@@ -48,11 +48,6 @@ impl SizeSpec {
         }
     }
 
-    #[inline]
-    fn is_fit(&self) -> bool {
-        *self == SizeSpec::Fit
-    }
-
     pub fn area(&self, other_spec: &SizeSpec) -> u32 {
         self.get() * other_spec.get()
     }
@@ -72,18 +67,23 @@ impl SizeSpec {
     }
 
     #[inline]
-    fn is_fill(&self) -> bool {
+    pub(crate) fn is_fit(&self) -> bool {
+        *self == SizeSpec::Fit
+    }
+
+    #[inline]
+    pub(crate) fn is_fill(&self) -> bool {
         *self == SizeSpec::Fill
     }
 
-    fn is_pixel(&self) -> bool {
+    pub(crate) fn is_pixel(&self) -> bool {
         match self {
             SizeSpec::Pixel(_) => true,
             _ => false,
         }
     }
 
-    fn is_percent(&self) -> bool {
+    pub(crate) fn is_percent(&self) -> bool {
         match self {
             SizeSpec::Percent(_) => true,
             _ => false,

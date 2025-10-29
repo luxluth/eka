@@ -1,4 +1,4 @@
-#[derive(Debug, Default, Clone, Copy)]
+#[derive(Debug, Default, Clone, Copy, PartialEq)]
 pub enum Position {
     Fixed {
         x: u32,
@@ -8,7 +8,7 @@ pub enum Position {
     Auto,
 }
 
-#[derive(Debug, Default, Clone, Copy)]
+#[derive(Debug, Default, Clone, Copy, PartialEq)]
 pub enum Direction {
     #[default]
     Row,
