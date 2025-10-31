@@ -13,13 +13,11 @@ macro_rules! style {
     ($elem:expr, $root:expr, {
     $($field:ident : $value:expr),* $(,)?
     }) => {{
-        {
-            let style_mut = $elem.style_mut($root);
+        $elem.update_style($root, |style_mut| {
             $(
                 style_mut.$field = $value;
             )*
-            $elem.set_dirty($root);
-        }
+        });
     }};
 }
 

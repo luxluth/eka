@@ -1,11 +1,11 @@
 #![doc = include_str!("../README.md")]
 
-use std::collections::HashSet;
+use std::collections::{HashSet, VecDeque};
 
 use crate::{
     boxalloc::Allocator,
     color::Color,
-    commands::DrawCommand,
+    commands::{Command, Drawing},
     position::{Direction, LayoutStrategy, Position},
     sizing::{Padding, SizeSpec},
 };
@@ -46,8 +46,19 @@ impl Space {
     }
 }
 
-pub type CapsuleRef = usize;
 pub type DataRef = usize;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct CapsuleRef {
+    id: usize,
+    generation: u32,
+}
+
+#[derive(Debug, Clone, Default)]
+struct CapsuleSlot {
+    capsule: Option<Capsule>,
+    generation: u32,
+}
 
 #[derive(Debug, Clone)]
 struct Capsule {
@@ -66,19 +77,43 @@ pub struct Frame {
 pub type BoxElement = Frame;
 
 impl<'a> Frame {
-    pub fn style_mut(&'a self, root: &'a mut Root) -> &'a mut Style {
-        unsafe {
-            root.styles
-                .get_unchecked_mut(root.capsules[self.capsule_ref].style_ref)
+    pub fn update_style<F>(&self, root: &mut Root, applier: F)
+    where
+        F: FnOnce(&mut Style),
+    {
+        if let Some(style_mut) = self.get_style_mut(root) {
+            applier(style_mut);
+            self.set_dirty(root);
         }
+    }
+
+    fn get_style_mut(&self, root: &'a mut Root) -> Option<&'a mut Style> {
+        let style_ref = if let Some(capsule) = root.get_capsule_mut(self.capsule_ref) {
+            // We get the `usize`, and the borrow of `root` ends here.
+            Some(capsule.style_ref)
+        } else {
+            // The handle was invalid
+            return None;
+        };
+
+        if let Some(style_ref) = style_ref {
+            root.styles
+                .get_mut(style_ref)
+                .and_then(|style_option| style_option.as_mut())
+        } else {
+            // This case is already handled, but we're explicit.
+            None
+        }
+    }
+}
+
+impl Frame {
+    pub fn get_ref(&self) -> CapsuleRef {
+        self.capsule_ref
     }
 
     pub fn set_dirty(&self, root: &mut Root) {
         root.set_dirty(self.capsule_ref);
-    }
-
-    pub fn get_ref(&self) -> usize {
-        self.capsule_ref
     }
 }
 
@@ -114,76 +149,32 @@ pub struct Style {
 
 #[derive(Debug)]
 pub struct Root {
-    pub(crate) spaces: Vec<Space>,
-    pub(crate) styles: Vec<Style>,
-    pub(crate) capsules: Vec<Capsule>,
+    capsules: Vec<CapsuleSlot>,
+    capsule_free_list: VecDeque<usize>,
+    spaces: Vec<Option<Space>>,
+    styles: Vec<Option<Style>>,
 
-    pub(crate) dirties: HashSet<usize>,
+    pub(crate) dirties: HashSet<CapsuleRef>,
 
     pub(crate) allocator: Allocator,
-}
-
-impl std::ops::Index<Capsule> for Vec<Style> {
-    type Output = Style;
-
-    fn index(&self, index: Capsule) -> &Self::Output {
-        unsafe { self.get_unchecked(index.style_ref) }
-    }
-}
-
-impl std::ops::Index<&Capsule> for Vec<Style> {
-    type Output = Style;
-
-    fn index(&self, index: &Capsule) -> &Self::Output {
-        unsafe { self.get_unchecked(index.style_ref) }
-    }
-}
-
-impl std::ops::Index<Capsule> for Vec<Space> {
-    type Output = Space;
-
-    fn index(&self, index: Capsule) -> &Self::Output {
-        unsafe { self.get_unchecked(index.space_ref) }
-    }
-}
-
-impl std::ops::Index<&Capsule> for Vec<Space> {
-    type Output = Space;
-
-    fn index(&self, index: &Capsule) -> &Self::Output {
-        unsafe { self.get_unchecked(index.space_ref) }
-    }
-}
-
-impl std::ops::IndexMut<Capsule> for Vec<Space> {
-    fn index_mut(&mut self, index: Capsule) -> &mut Self::Output {
-        unsafe { self.get_unchecked_mut(index.space_ref) }
-    }
-}
-
-impl std::ops::IndexMut<&Capsule> for Vec<Space> {
-    fn index_mut(&mut self, index: &Capsule) -> &mut Self::Output {
-        unsafe { self.get_unchecked_mut(index.space_ref) }
-    }
 }
 
 impl Root {
     pub fn new(width: u32, height: u32) -> Self {
         Self {
-            spaces: vec![Space::zero().with_width(width).with_height(height)],
+            // WARN: space[0] is the root space and should always be accessible
+            spaces: vec![Some(Space::zero().with_width(width).with_height(height))],
+
             styles: vec![],
             capsules: vec![],
             dirties: HashSet::new(),
+            capsule_free_list: VecDeque::new(),
             allocator: Allocator::new(),
         }
     }
 
-    fn children_of(&self, parent_ref: CapsuleRef) -> &Vec<CapsuleRef> {
-        &self.capsules[parent_ref].children
-    }
-
     pub fn get_binding_for_frame<T: 'static>(&mut self, frame: &Frame) -> Option<&T> {
-        if let Some(data_idx) = self.capsules[frame.capsule_ref].data_ref {
+        if let Some(data_idx) = self.get_capsule(frame.capsule_ref).unwrap().data_ref {
             return self.allocator.get(data_idx);
         } else {
             None
@@ -200,9 +191,11 @@ impl Root {
 
     pub fn delete_binding(&mut self, index: DataRef) -> bool {
         for casp in &mut self.capsules {
-            if let Some(data_ref) = casp.data_ref {
-                if data_ref == index {
-                    casp.data_ref = None;
+            if let Some(cap) = &mut casp.capsule {
+                if let Some(data_ref) = cap.data_ref {
+                    if data_ref == index {
+                        cap.data_ref = None;
+                    }
                 }
             }
         }
@@ -220,12 +213,12 @@ impl Root {
     ) -> Frame {
         let new_id = self.spaces.len();
         let space = Space::zero();
-        self.spaces.push(space);
+
+        self.spaces.push(Some(space));
 
         let new_style_idx = self.styles.len();
-        self.styles.push(Style::default());
+        self.styles.push(Some(Style::default()));
 
-        let caps_ref = self.capsules.len();
         let caps = Capsule {
             space_ref: new_id,
             parent_ref,
@@ -234,14 +227,36 @@ impl Root {
             children: vec![],
         };
 
-        self.capsules.push(caps);
+        let (new_id, new_generation) = {
+            if let Some(recycled_id) = self.capsule_free_list.pop_front() {
+                let slot = &mut self.capsules[recycled_id];
+                slot.capsule = Some(caps);
+                // The generation is already correct (it was incremented on removal)
+                (recycled_id, slot.generation)
+            } else {
+                let new_id = self.capsules.len();
+                let new_slot = CapsuleSlot {
+                    capsule: Some(caps),
+                    generation: 0, // Start at generation 0
+                };
+                self.capsules.push(new_slot);
+                (new_id, 0)
+            }
+        };
 
-        if let Some(parent) = parent_ref {
-            self.capsules[parent].children.push(caps_ref);
+        let new_ref = CapsuleRef {
+            id: new_id,
+            generation: new_generation,
+        };
+
+        if let Some(pref) = parent_ref {
+            if let Some(parent_capsule) = self.get_capsule_mut(pref) {
+                parent_capsule.children.push(new_ref);
+            }
         }
 
         Frame {
-            capsule_ref: caps_ref,
+            capsule_ref: new_ref,
         }
     }
 
@@ -252,13 +267,46 @@ impl Root {
     pub fn add_frame(&mut self, data: Option<DataRef>) -> Frame {
         self.internal_add_frame(None, data)
     }
+}
 
-    fn set_dirty(&mut self, capsule: CapsuleRef) {
-        if self.dirties.insert(capsule) {
-            // Use the efficient version from above
-            let children = self.capsules[capsule].children.clone();
-            for child in children {
-                self.set_dirty(child);
+impl Root {
+    /// Safely gets an immutable reference to a capsule.
+    fn get_capsule(&self, frame_ref: CapsuleRef) -> Option<&Capsule> {
+        if let Some(slot) = self.capsules.get(frame_ref.id) {
+            if slot.generation == frame_ref.generation {
+                return slot.capsule.as_ref();
+            }
+        }
+
+        None
+    }
+
+    /// Safely gets a mutable reference to a capsule.
+    fn get_capsule_mut(&mut self, frame_ref: CapsuleRef) -> Option<&mut Capsule> {
+        if let Some(slot) = self.capsules.get_mut(frame_ref.id) {
+            if slot.generation == frame_ref.generation {
+                return slot.capsule.as_mut();
+            }
+        }
+        None
+    }
+}
+
+impl Root {
+    fn set_dirty(&mut self, capsule_ref: CapsuleRef) {
+        if !self.dirties.insert(capsule_ref) {
+            return;
+        }
+
+        let mut current = self.get_capsule(capsule_ref);
+        while let Some(capsule) = current {
+            if let Some(parent_ref) = capsule.parent_ref {
+                if !self.dirties.insert(parent_ref) {
+                    break; // Parent already dirty
+                }
+                current = self.get_capsule(parent_ref);
+            } else {
+                break; // Reached the top
             }
         }
     }
@@ -266,13 +314,16 @@ impl Root {
 
 impl Root {
     pub fn compute(&mut self) {
-        // For now, we just compute the whole tree.
-        // We can re-integrate the `dirties` logic later once this works.
+        if self.dirties.is_empty() {
+            return;
+        }
+
+        // We are going to re-compute everything
         self.dirties.clear();
 
         // 1. Get the screen's dimensions from the root space (space[0])
         let (root_w, root_h) = {
-            let root_space = self.spaces[0];
+            let root_space = self.spaces[0].unwrap();
             (
                 root_space.width.unwrap_or(0),
                 root_space.height.unwrap_or(0),
@@ -284,13 +335,18 @@ impl Root {
         let top_level_capsules = self
             .capsules
             .iter()
-            .enumerate()
-            .filter_map(|(i, cap)| {
-                if cap.parent_ref.is_none() {
-                    Some(i)
-                } else {
-                    None
-                }
+            .enumerate() // Gives us (i, slot)
+            .filter_map(|(i, slot)| {
+                slot.capsule.as_ref().and_then(|capsule_data| {
+                    if capsule_data.parent_ref.is_none() {
+                        Some(CapsuleRef {
+                            id: i,
+                            generation: slot.generation,
+                        })
+                    } else {
+                        None
+                    }
+                })
             })
             .collect::<Vec<_>>();
 
@@ -302,17 +358,81 @@ impl Root {
 
             // Start Pass 2: This gives each node its final position and size,
             // using the root dimensions as the available space.
-            // Note: We use the `space` from Pass 1, which holds the *desired* size.
-            let desired_space = self.spaces[self.capsules[capsule_ref].space_ref];
-            let _given_width = desired_space.width.unwrap_or(0);
-            let _given_height = desired_space.height.unwrap_or(0);
-
             // A top-level node's "given" space is its own desired size,
             // but it's positioned at (0,0).
             // (Unless it's `Fill` or `Percent`, in which case it gets root_w/root_h)
             // Let's simplify and just pass the root size. Pass 2 will resolve it.
             self.compute_pass_2_layout(capsule_ref, 0, 0, root_w, root_h);
         }
+    }
+}
+
+impl Root {
+    pub fn resize(&mut self, new_width: u32, new_height: u32) {
+        let root_space = self.spaces[0]
+            .as_mut()
+            .expect("Root space [0] must always exist");
+
+        root_space.width = Some(new_width);
+        root_space.height = Some(new_height);
+
+        let top_level_capsules = self
+            .capsules
+            .iter()
+            .enumerate() // Gives us (i, slot)
+            .filter_map(|(i, slot)| {
+                slot.capsule.as_ref().and_then(|capsule_data| {
+                    if capsule_data.parent_ref.is_none() {
+                        Some(CapsuleRef {
+                            id: i,
+                            generation: slot.generation,
+                        })
+                    } else {
+                        None
+                    }
+                })
+            })
+            .collect::<Vec<_>>();
+
+        for capsule_ref in top_level_capsules {
+            self.set_dirty(capsule_ref);
+        }
+    }
+}
+
+impl Root {
+    pub fn remove_frame(&mut self, frame_ref: CapsuleRef) {
+        let capsule = match self.get_capsule_mut(frame_ref) {
+            Some(cap) => cap.clone(), // We must clone it to release the `&mut self`
+            None => return,           // Handle is old or invalid, do nothing
+        };
+
+        for child_ref in capsule.children.clone() {
+            self.remove_frame(child_ref); // This call is now safe
+        }
+
+        if let Some(parent_ref) = capsule.parent_ref {
+            if let Some(parent_capsule) = self.get_capsule_mut(parent_ref) {
+                parent_capsule.children.retain(|&c| c != frame_ref);
+                self.set_dirty(parent_ref);
+            }
+        }
+
+        self.spaces[capsule.space_ref] = None;
+        self.styles[capsule.style_ref] = None;
+        if let Some(data_ref) = capsule.data_ref {
+            self.allocator.dealloc(data_ref);
+        }
+        self.dirties.remove(&frame_ref);
+
+        // --- 5. THIS IS THE MAGIC ---
+        // Get the slot, `take()` the capsule, and increment the generation
+        let slot = &mut self.capsules[frame_ref.id];
+        slot.capsule = None; // The capsule is now gone
+        slot.generation = slot.generation.wrapping_add(1); // Increment generation
+
+        // --- 6. Add the ID to the free list for recycling ---
+        self.capsule_free_list.push_back(frame_ref.id);
     }
 }
 
@@ -325,9 +445,16 @@ impl Root {
         given_width: u32,
         given_height: u32,
     ) {
-        let capsule = self.capsules[frame_ref].clone();
-        let style = self.styles[capsule.style_ref];
-        let space = &mut self.spaces[capsule.space_ref];
+        let (capsule, style) = match self.get_capsule(frame_ref).and_then(|cap| {
+            // Chain the getters. Get capsule, then its style.
+            let style = self.styles[cap.style_ref].as_ref()?;
+            Some((cap.clone(), style.clone())) // Clone them
+        }) {
+            Some((cap, style)) => (cap, style),
+            None => return, // Dead handle or missing style, skip.
+        };
+
+        let space = self.spaces[capsule.space_ref].as_mut().unwrap();
 
         // --- 1. Determine My Final Size ---
         // Get my "desired" size from Pass 1
@@ -372,10 +499,18 @@ impl Root {
         let mut fill_h_count = 0;
 
         for &child_ref in &capsule.children {
-            let child_style = self.styles[self.capsules[child_ref].style_ref];
+            let (child_style, child_space) = match self.get_capsule(child_ref).and_then(|cap| {
+                // Chain getters: get capsule, then its style and space
+                let style = self.styles[cap.style_ref].as_ref()?;
+                let space = self.spaces[cap.space_ref].as_ref()?;
+                Some((style, space))
+            }) {
+                Some((s, sp)) => (s, sp),
+                None => continue, // Dead handle or missing data, skip
+            };
+
             if child_style.position == Position::Auto {
                 in_flow_children.push(child_ref);
-                let child_space = self.spaces[self.capsules[child_ref].space_ref];
                 let (child_desired_w, child_desired_h) =
                     (child_space.width.unwrap(), child_space.height.unwrap());
 
@@ -386,7 +521,6 @@ impl Root {
                         total_non_fill_w += child_desired_w;
                     }
                 } else {
-                    // Direction::Column
                     if child_style.height.is_fill() {
                         fill_h_count += 1;
                     } else {
@@ -426,11 +560,19 @@ impl Root {
         // --- 7. Recurse and Arrange All Children ---
         let mut current_x = content_x;
         let mut current_y = content_y;
+        let children_to_layout = capsule.children.clone();
 
-        for child_ref in &capsule.children {
-            let child_capsule = self.capsules[*child_ref].clone();
-            let child_style = self.styles[child_capsule.style_ref];
-            let child_space = self.spaces[child_capsule.space_ref];
+        for child_ref in &children_to_layout {
+            let (child_capsule, child_style, child_space) =
+                match self.get_capsule(*child_ref).and_then(|cap| {
+                    let style = self.styles[cap.style_ref].as_ref()?;
+                    let space = self.spaces[cap.space_ref].as_ref()?;
+                    Some((cap.clone(), style.clone(), space)) // Clone what we need
+                }) {
+                    Some((cap, style, space)) => (cap, style, space),
+                    None => continue, // Dead handle
+                };
+
             let (child_desired_w, child_desired_h) =
                 (child_space.width.unwrap(), child_space.height.unwrap());
 
@@ -492,7 +634,7 @@ impl Root {
                         child_given_h,
                     );
 
-                    let child_space_mut = &mut self.spaces[child_capsule.space_ref];
+                    let child_space_mut = self.spaces[child_capsule.space_ref].as_mut().unwrap();
                     if style.layout == LayoutStrategy::Flex {
                         if style.flow == Direction::Row && child_style.height.is_auto() {
                             child_space_mut.height = Some(content_h);
@@ -532,15 +674,24 @@ impl Root {
     /// PASS 1 (Bottom-Up): Measure desired content size.
     /// Returns (desired_width, desired_height)
     fn compute_pass_1_measure(&mut self, frame_ref: CapsuleRef) -> (u32, u32) {
-        let capsule = self.capsules[frame_ref].clone(); // Clone to avoid borrow issues
-        let style = self.styles[capsule.style_ref];
+        let (capsule, style) = match self.get_capsule(frame_ref).and_then(|cap| {
+            // Chain the getters. Get capsule, then its style.
+            let style = self.styles[cap.style_ref].as_ref()?;
+            Some((cap.clone(), style.clone())) // Clone them
+        }) {
+            Some((cap, style)) => (cap, style),
+            None => return (0, 0), // Dead handle or missing style, skip.
+        };
 
         // --- 1. Recurse and Measure "In-Flow" Children ---
         // Children with `Position::Fixed` are "out-of-flow" and do not
         // contribute to their parent's `FitContent` size.
         let mut in_flow_child_sizes = Vec::new();
         for &child_ref in &capsule.children {
-            let child_style = self.styles[self.capsules[child_ref].style_ref];
+            let child_style = match self.get_capsule(child_ref) {
+                Some(child_cap) => self.styles[child_cap.style_ref].as_ref().unwrap().clone(),
+                None => continue,
+            };
 
             // Recurse for all children
             let (child_w, child_h) = self.compute_pass_1_measure(child_ref);
@@ -616,31 +767,41 @@ impl Root {
         };
 
         // --- 4. Store Result in Space ---
-        let space = &mut self.spaces[capsule.space_ref];
-        space.width = Some(desired_w);
-        space.height = Some(desired_h);
+        if let Some(space) = self.spaces[capsule.space_ref].as_mut() {
+            space.width = Some(desired_w);
+            space.height = Some(desired_h);
+        }
 
         (desired_w, desired_h)
     }
 }
 
 impl Root {
-    pub fn commands(&self) -> Vec<DrawCommand> {
-        use DrawCommand::*;
+    pub fn commands(&self) -> Vec<Command> {
+        use Drawing::*;
 
         let mut cmds = vec![];
         for frame in &self.capsules {
-            let st = self.styles[frame];
-            let fs = self.spaces[frame];
-            cmds.push(Rectangle {
-                x: fs.x,
-                y: fs.y,
-                width: fs.width.unwrap_or(0),
-                height: fs.height.unwrap_or(0),
-                color: st.background_color,
-                z_index: st.z_index,
-            });
+            if let Some(caps) = &frame.capsule {
+                let style = self.styles.get(caps.style_ref).and_then(|s| s.as_ref());
+                let space = self.spaces.get(caps.space_ref).and_then(|s| s.as_ref());
+
+                if let (Some(st), Some(fs)) = (style, space) {
+                    cmds.push(Command {
+                        z_index: st.z_index,
+                        desc: Rectangle {
+                            x: fs.x,
+                            y: fs.y,
+                            width: fs.width.unwrap_or(0),
+                            height: fs.height.unwrap_or(0),
+                            color: st.background_color,
+                        },
+                    });
+                }
+            }
         }
+
+        cmds.sort_by_key(|cmd| cmd.z_index);
 
         return cmds;
     }
@@ -648,80 +809,146 @@ impl Root {
 
 #[cfg(feature = "debug")]
 impl Root {
-    pub fn debug_layout_tree_base(&self, cref: CapsuleRef, depth: usize) {
-        use ansi_term::Style;
-
-        let indent = "  ".repeat(depth);
-
-        if let Some(capsule) = self.capsules.get(cref) {
-            let space = self.spaces[capsule.space_ref];
-            let style = self.styles[capsule.style_ref];
-
-            let is_child = depth != 0;
-
-            let num_s = Style::new().dimmed().bold();
-            let dim = Style::new().dimmed();
-            let field = Style::new().fg(ansi_term::Color::Purple);
-            let field_name = Style::new().bold();
-
-            if !is_child {
-                eprintln!("{indent}Capsule({})", num_s.paint(cref.to_string()));
-            } else {
-                eprintln!(
-                    "{indent}{}Capsule({})",
-                    dim.paint("└"),
-                    num_s.paint(cref.to_string())
-                );
-            }
-
-            eprintln!(
-                "{indent}  {} {} .. {}={} {}={} {}={} {}={}",
-                dim.paint("│"),
-                dim.paint("Space"),
-                field_name.paint("x"),
-                field.paint(space.x.to_string()),
-                field_name.paint("y"),
-                field.paint(space.y.to_string()),
-                field_name.paint("w"),
-                field.paint(format!("{:?}", space.width)),
-                field_name.paint("h"),
-                field.paint(format!("{:?}", space.height))
-            );
-            eprintln!(
-                "{indent}  {} {} .. {}={} {}={} {}={}",
-                dim.paint("│"),
-                dim.paint("Style"),
-                field_name.paint("width"),
-                field.paint(format!("{:?}", style.width)),
-                field_name.paint("height"),
-                field.paint(format!("{:?}", style.height)),
-                field_name.paint("padding"),
-                field.paint(format!("{}", style.padding))
-            );
-
-            for child in self.children_of(cref) {
-                self.debug_layout_tree_base(*child, depth + 1);
-            }
-        } else {
-            eprintln!("{indent}Capsule {cref} not found.");
-        }
-    }
-
+    /// Prints a debug representation of the entire layout tree.
     pub fn debug_layout_tree(&self) {
         use ansi_term::Style;
         let s = Style::new().fg(ansi_term::Color::Yellow).bold();
-        eprintln!(
-            "{}",
-            s.paint(format!(
-                "R ┬ {}x{}",
-                self.spaces[0].width.unwrap_or(0),
-                self.spaces[0].height.unwrap_or(0)
-            ))
-        );
-        for (child, cap) in self.capsules.iter().enumerate() {
-            if cap.parent_ref.is_none() {
-                self.debug_layout_tree_base(child, 1);
+
+        // 1. Safely get root space dimensions
+        let (w, h) = self
+            .spaces
+            .get(0)
+            .and_then(|s| s.as_ref())
+            .map(|s| (s.width.unwrap_or(0), s.height.unwrap_or(0)))
+            .unwrap_or((0, 0));
+
+        eprintln!("{}", s.paint(format!("R ┬ {}x{}", w, h)));
+
+        // 2. Find all *valid* top-level nodes
+        let mut top_level_nodes = Vec::new();
+        for (i, slot) in self.capsules.iter().enumerate() {
+            if let Some(cap) = &slot.capsule {
+                if cap.parent_ref.is_none() {
+                    top_level_nodes.push(CapsuleRef {
+                        id: i,
+                        generation: slot.generation,
+                    });
+                }
             }
+        }
+
+        // 3. Print the tree for each top-level node
+        let count = top_level_nodes.len();
+        for (i, cref) in top_level_nodes.iter().enumerate() {
+            let is_last = i == count - 1;
+            // Start with an empty indent string, at depth 0
+            self.debug_print_node(*cref, "", is_last);
+        }
+    }
+
+    /// Recursively prints a single node and its children.
+    /// `indent` is the string of `│ ` and `  ` characters.
+    /// `is_last` determines if we use `└` or `├`.
+    fn debug_print_node(&self, cref: CapsuleRef, indent: &str, is_last: bool) {
+        use ansi_term::Style;
+
+        // --- 1. Setup Styles & Strings ---
+        let num_s = Style::new().dimmed().bold();
+        let dim = Style::new().dimmed();
+        let field = Style::new().fg(ansi_term::Color::Purple);
+        let _field_name = Style::new().bold();
+        let error_s = Style::new().fg(ansi_term::Color::Red);
+
+        // This is the new, more descriptive ref
+        let cref_str = format!("{}@{}", cref.id, cref.generation);
+
+        // Correctly determine tree-drawing characters
+        let branch_char = if is_last { "└" } else { "├" };
+        let continue_char = if is_last { " " } else { "│" }; // Note the space
+
+        let branch_str = dim.paint(format!("{indent}{branch_char}─ "));
+        let continue_str = format!("{indent}{continue_char}  "); // This is the indent for children
+
+        // --- 2. Safely Get All Data ---
+        let (capsule, space, style) = {
+            // Use our safe getter
+            let Some(slot) = self.capsules.get(cref.id) else {
+                eprintln!(
+                    "{branch_str}{}",
+                    error_s.paint(format!("Capsule {cref_str} [Invalid ID]"))
+                );
+                return;
+            };
+            if slot.generation != cref.generation {
+                eprintln!(
+                    "{branch_str}{}",
+                    error_s.paint(format!("Capsule {cref_str} [Old Generation]"))
+                );
+                return;
+            }
+
+            // Now, get the inner data
+            let Some(cap) = slot.capsule.as_ref() else {
+                eprintln!(
+                    "{branch_str}{}",
+                    error_s.paint(format!("Capsule {cref_str} [Empty Slot]"))
+                );
+                return;
+            };
+
+            // Safely get space and style, allowing them to be None
+            let sp = self.spaces.get(cap.space_ref).and_then(|s| s.as_ref());
+            let st = self.styles.get(cap.style_ref).and_then(|s| s.as_ref());
+
+            (cap.clone(), sp, st) // Clone capsule to release `self` borrow
+        };
+
+        // --- 3. Print This Node's Info ---
+        eprintln!("{branch_str}Capsule({})", num_s.paint(cref_str));
+
+        let info_indent = dim.paint(format!("{continue_str}"));
+
+        // Print Space (safely)
+        if let Some(space) = space {
+            eprintln!(
+                "{info_indent}{dim_space} x={} y={} w={} h={}",
+                field.paint(space.x.to_string()),
+                field.paint(space.y.to_string()),
+                field.paint(format!("{:?}", space.width)),
+                field.paint(format!("{:?}", space.height)),
+                dim_space = dim.paint("Space: ")
+            );
+        } else {
+            eprintln!("{info_indent}{}", error_s.paint("Space: [None]"));
+        }
+
+        // Print Style (safely, with all new fields)
+        if let Some(style) = style {
+            eprintln!(
+                "{info_indent}{dim_style} w={} h={} padding={}",
+                field.paint(format!("{:?}", style.width)),
+                field.paint(format!("{:?}", style.height)),
+                field.paint(format!("{}", style.padding)),
+                dim_style = dim.paint("Style: ")
+            );
+            // --- ADDING MORE INFO ---
+            eprintln!(
+                "{info_indent}{dim_layout} strategy={} flow={} gap={} pos={}",
+                field.paint(format!("{:?}", style.layout)),
+                field.paint(format!("{:?}", style.flow)),
+                field.paint(style.gap.to_string()),
+                field.paint(format!("{:?}", style.position)),
+                dim_layout = dim.paint("Layout:")
+            );
+        } else {
+            eprintln!("{info_indent}{}", error_s.paint("Style: [None]"));
+        }
+
+        // --- 4. Recurse for Children ---
+        let children_count = capsule.children.len();
+        for (i, child_cref) in capsule.children.iter().enumerate() {
+            let is_last_child = i == children_count - 1;
+            self.debug_print_node(*child_cref, &continue_str, is_last_child);
         }
     }
 }
