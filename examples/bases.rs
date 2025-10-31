@@ -1,6 +1,6 @@
 use std::time::Instant;
 
-use heka::{BoxElement, Root, color, layout, pad, size, style};
+use heka::{BoxElement, Root, color, pad, size, style};
 
 fn main() {
     let mut root = Root::new(800, 600);
@@ -11,14 +11,19 @@ fn main() {
         width: size!(fill),
         height: size!(fill),
         padding: pad!(10, 20),
-        layout: layout!(flex),
+        gap: 10,
     });
 
     let frame: BoxElement = root.add_frame_child(&frame1, None);
     style!(frame, &mut root, {
-        background_color: color!(red),
-        width: size!(fill),
-        height: size!(fill),
+        background_color: color!(risd_blue),
+        width: size!(50 %),
+    });
+
+    let frame: BoxElement = root.add_frame_child(&frame1, None);
+    style!(frame, &mut root, {
+        background_color: color!(dodger_blue),
+        width: size!(50 %),
     });
 
     let now = Instant::now();

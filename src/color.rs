@@ -38,6 +38,9 @@ impl Color {
         a: 255,
     };
 
+    /// RISDBlue - I like this one a lot
+    pub const risd_blue: Color = Color::Hex(0x4455eeFF);
+
     /// Transform raw hex into RGBA componnent
     /// **FORMAT: RRGGBBAA**
     #[allow(non_snake_case)]

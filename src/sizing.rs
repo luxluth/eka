@@ -1,7 +1,7 @@
 /// Define dimension specification for a given element.
 /// These specification can either be dynamic or fixed.
 /// fill | fit | ..px | ..%
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, PartialEq, Default)]
 pub enum SizeSpec {
     /// **fill** represents the an element that wishes to fill up
     /// any remaining space in th parent
@@ -15,6 +15,9 @@ pub enum SizeSpec {
     /// **percent**, a value starting by 0..1 - 0.0 being 0% and 1.0 is 100%.
     /// It takes the size of the parent and multiplies it by the defined scalar
     Percent(f32),
+    #[default]
+    /// **auto**, this element is sized-awared of its neighbors
+    Auto,
 }
 
 impl std::ops::SubAssign for SizeSpec {
@@ -32,6 +35,7 @@ impl std::fmt::Debug for SizeSpec {
         match self {
             SizeSpec::Fill => write!(f, "fill"),
             SizeSpec::Fit => write!(f, "fit"),
+            SizeSpec::Auto => write!(f, "auto"),
             SizeSpec::Pixel(px) => write!(f, "{}px", px),
             SizeSpec::Percent(p) => write!(f, "{}%", p * 100.0),
         }
@@ -44,7 +48,7 @@ impl SizeSpec {
             SizeSpec::Pixel(px) => Some(*px),
             SizeSpec::Percent(pct) => Some((*pct * parent_value as f32) as u32),
             SizeSpec::Fill => Some(parent_value),
-            SizeSpec::Fit => None,
+            SizeSpec::Fit | SizeSpec::Auto => None,
         }
     }
 
@@ -67,23 +71,30 @@ impl SizeSpec {
     }
 
     #[inline]
-    pub(crate) fn is_fit(&self) -> bool {
+    pub fn is_fit(&self) -> bool {
         *self == SizeSpec::Fit
     }
 
     #[inline]
-    pub(crate) fn is_fill(&self) -> bool {
+    pub fn is_auto(&self) -> bool {
+        *self == SizeSpec::Auto
+    }
+
+    #[inline]
+    pub fn is_fill(&self) -> bool {
         *self == SizeSpec::Fill
     }
 
-    pub(crate) fn is_pixel(&self) -> bool {
+    #[inline]
+    pub fn is_pixel(&self) -> bool {
         match self {
             SizeSpec::Pixel(_) => true,
             _ => false,
         }
     }
 
-    pub(crate) fn is_percent(&self) -> bool {
+    #[inline]
+    pub fn is_percent(&self) -> bool {
         match self {
             SizeSpec::Percent(_) => true,
             _ => false,
@@ -91,11 +102,11 @@ impl SizeSpec {
     }
 }
 
-impl Default for SizeSpec {
-    fn default() -> Self {
-        return Self::Pixel(0);
-    }
-}
+// impl Default for SizeSpec {
+//     fn default() -> Self {
+//         return Self::Auto;
+//     }
+// }
 
 #[derive(Debug, Default, Clone, Copy)]
 pub struct Padding {

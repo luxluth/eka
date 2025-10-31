@@ -33,6 +33,9 @@ macro_rules! size {
     (fit) => {
         $crate::sizing::SizeSpec::Fit
     };
+    (auto) => {
+        $crate::sizing::SizeSpec::Auto
+    };
     ($val:literal %) => {
         $crate::sizing::SizeSpec::Percent($val as f32 / 100f32)
     };

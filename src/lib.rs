@@ -1,6 +1,6 @@
 #![doc = include_str!("../README.md")]
 
-use std::collections::{HashSet, VecDeque};
+use std::collections::HashSet;
 
 use crate::{
     arena::Arena,
@@ -8,7 +8,6 @@ use crate::{
     position::{Direction, LayoutStrategy, Position},
     sizing::{Padding, SizeSpec},
 };
-use smallvec::SmallVec;
 
 mod arena;
 pub mod color;
@@ -432,26 +431,30 @@ impl Root {
                 Position::Auto => {
                     // This child is "in-flow".
                     let (child_given_x, child_given_y, child_given_w, child_given_h);
+
                     match style.layout {
                         LayoutStrategy::Flex => match style.flow {
                             Direction::Row => {
                                 child_given_x = current_x;
                                 child_given_y = current_y;
-                                child_given_w = if child_style.width.is_fill() {
-                                    fill_w_each
-                                } else {
-                                    child_desired_w
+
+                                child_given_w = match child_style.width {
+                                    SizeSpec::Fill => fill_w_each,
+                                    SizeSpec::Percent(_) => content_w, // Give it full content box
+                                    _ => child_desired_w,
                                 };
+
                                 child_given_h = content_h; // Flex row items fill height
                             }
                             Direction::Column => {
                                 child_given_x = current_x;
                                 child_given_y = current_y;
                                 child_given_w = content_w; // Flex col items fill width
-                                child_given_h = if child_style.height.is_fill() {
-                                    fill_h_each
-                                } else {
-                                    child_desired_h
+
+                                child_given_h = match child_style.height {
+                                    SizeSpec::Fill => fill_h_each,
+                                    SizeSpec::Percent(_) => content_h,
+                                    _ => child_desired_h,
                                 };
                             }
                         },
@@ -472,15 +475,25 @@ impl Root {
                         child_given_h,
                     );
 
+                    let child_space_mut = &mut self.spaces[child_capsule.space_ref];
+                    if style.layout == LayoutStrategy::Flex {
+                        if style.flow == Direction::Row && child_style.height.is_auto() {
+                            child_space_mut.height = Some(content_h);
+                        }
+                        if style.flow == Direction::Column && child_style.width.is_auto() {
+                            child_space_mut.width = Some(content_w);
+                        }
+                    }
+
                     // Update cursor for next in-flow item
                     match style.layout {
                         LayoutStrategy::Flex => {
-                            // After recursion, get the child's *final* size
                             let (child_final_w, child_final_h) = {
-                                let final_space = self.spaces[child_capsule.space_ref];
-                                (final_space.width.unwrap(), final_space.height.unwrap())
+                                (
+                                    child_space_mut.width.unwrap(),
+                                    child_space_mut.height.unwrap(),
+                                )
                             };
-
                             match style.flow {
                                 Direction::Row => {
                                     current_x += child_final_w as i32 + style.gap as i32
@@ -522,7 +535,7 @@ impl Root {
         }
 
         // --- 2. Calculate This Node's "Content" Size ---
-        let (mut content_w, mut content_h) = (0, 0);
+        let (mut content_w, mut content_h);
 
         // Calculate content size based on children (if we are `Fit`)
         match style.layout {
@@ -575,13 +588,13 @@ impl Root {
         // `Fill` and `Percent` have 0 desired size in Pass 1. They expand in Pass 2.
         let desired_w = match style.width {
             SizeSpec::Pixel(w) => w,
-            SizeSpec::Fit => content_w + style.padding.left + style.padding.right,
+            SizeSpec::Fit | SizeSpec::Auto => content_w + style.padding.left + style.padding.right,
             SizeSpec::Fill | SizeSpec::Percent(_) => 0,
         };
 
         let desired_h = match style.height {
             SizeSpec::Pixel(h) => h,
-            SizeSpec::Fit => content_h + style.padding.top + style.padding.bottom,
+            SizeSpec::Fit | SizeSpec::Auto => content_h + style.padding.top + style.padding.bottom,
             SizeSpec::Fill | SizeSpec::Percent(_) => 0,
         };
 

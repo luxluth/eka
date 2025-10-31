@@ -15,10 +15,10 @@ pub enum Direction {
     Column,
 }
 
-#[derive(Debug, Default, Clone, Copy)]
+#[derive(Debug, Default, Clone, Copy, PartialEq)]
 pub enum LayoutStrategy {
-    #[default]
     NoStrategy,
+    #[default]
     Flex,
     // A later focus
     Grid,
