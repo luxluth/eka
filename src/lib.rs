@@ -74,8 +74,6 @@ pub struct Frame {
     capsule_ref: CapsuleRef,
 }
 
-pub type BoxElement = Frame;
-
 impl<'a> Frame {
     pub fn update_style<F>(&self, root: &mut Root, applier: F)
     where
