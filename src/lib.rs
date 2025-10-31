@@ -160,7 +160,7 @@ pub struct Root {
 impl Root {
     pub fn new(width: u32, height: u32) -> Self {
         Self {
-            // WARN: space[0] is the root space and should always be accessible
+            // NOTE: space[0] is the root space and should always be accessible
             spaces: vec![Some(Space::zero().with_width(width).with_height(height))],
 
             styles: vec![],
@@ -413,9 +413,6 @@ impl Root {
 
         self.spaces[capsule.space_ref] = None;
         self.styles[capsule.style_ref] = None;
-        if let Some(data_ref) = capsule.data_ref {
-            self.allocator.dealloc(data_ref);
-        }
         self.dirties.remove(&frame_ref);
 
         // --- 5. THIS IS THE MAGIC ---
@@ -438,16 +435,19 @@ impl Root {
         given_width: u32,
         given_height: u32,
     ) {
-        let (capsule, style) = match self.get_capsule(frame_ref).and_then(|cap| {
+        let (capsule, style, space_ref) = match self.get_capsule(frame_ref).and_then(|cap| {
             // Chain the getters. Get capsule, then its style.
             let style = self.styles[cap.style_ref].as_ref()?;
-            Some((cap.clone(), style.clone())) // Clone them
+            Some((cap.clone(), style.clone(), cap.space_ref)) // Clone them
         }) {
-            Some((cap, style)) => (cap, style),
+            Some((cap, style, sref)) => (cap, style, sref),
             None => return, // Dead handle or missing style, skip.
         };
 
-        let space = self.spaces[capsule.space_ref].as_mut().unwrap();
+        let space = match self.spaces[space_ref].as_mut() {
+            Some(s) => s,
+            None => return, // This space was removed, skip.
+        };
 
         // --- 1. Determine My Final Size ---
         // Get my "desired" size from Pass 1
@@ -627,7 +627,11 @@ impl Root {
                         child_given_h,
                     );
 
-                    let child_space_mut = self.spaces[child_capsule.space_ref].as_mut().unwrap();
+                    let child_space_mut = match self.spaces[child_capsule.space_ref].as_mut() {
+                        Some(s) => s,
+                        None => continue, // This child's space was removed
+                    };
+
                     if style.layout == LayoutStrategy::Flex {
                         if style.flow == Direction::Row && child_style.height.is_auto() {
                             child_space_mut.height = Some(content_h);
@@ -681,9 +685,12 @@ impl Root {
         // contribute to their parent's `FitContent` size.
         let mut in_flow_child_sizes = Vec::new();
         for &child_ref in &capsule.children {
-            let child_style = match self.get_capsule(child_ref) {
-                Some(child_cap) => self.styles[child_cap.style_ref].as_ref().unwrap().clone(),
-                None => continue,
+            let child_style = match self
+                .get_capsule(child_ref)
+                .and_then(|cap| self.styles[cap.style_ref].as_ref())
+            {
+                Some(style) => style.clone(),
+                None => continue, // Dead handle or missing style
             };
 
             // Recurse for all children
