@@ -4,9 +4,9 @@ use heka::{BoxElement, Root, color, pad, size, style};
 
 fn main() {
     let mut root = Root::new(800, 600);
-    let frame1: BoxElement = root.add_frame(None);
+    let root_frame: BoxElement = root.add_frame(None);
 
-    style!(frame1, &mut root, {
+    style!(root_frame, &mut root, {
         background_color: color!(red),
         width: size!(fill),
         height: size!(fill),
@@ -14,17 +14,19 @@ fn main() {
         gap: 10,
     });
 
-    let frame: BoxElement = root.add_frame_child(&frame1, None);
+    let frame: BoxElement = root.add_frame_child(&root_frame, None);
     style!(frame, &mut root, {
         background_color: color!(risd_blue),
         width: size!(fill),
     });
 
-    let frame: BoxElement = root.add_frame_child(&frame1, None);
+    let frame: BoxElement = root.add_frame_child(&root_frame, None);
     style!(frame, &mut root, {
         background_color: color!(dodger_blue),
         width: size!(fill),
     });
+
+    root.remove_frame(frame.get_ref());
 
     let now = Instant::now();
     root.compute();

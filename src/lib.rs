@@ -174,11 +174,9 @@ impl Root {
     }
 
     pub fn get_binding_for_frame<T: 'static>(&mut self, frame: &Frame) -> Option<&T> {
-        if let Some(data_idx) = self.get_capsule(frame.capsule_ref).unwrap().data_ref {
-            return self.allocator.get(data_idx);
-        } else {
-            None
-        }
+        self.get_capsule(frame.capsule_ref)
+            .and_then(|cap| cap.data_ref)
+            .and_then(|data_idx| self.allocator.get(data_idx))
     }
 
     pub fn set_binding<T: 'static>(&mut self, data: T) -> DataRef {
@@ -189,21 +187,17 @@ impl Root {
         self.allocator.get(index)
     }
 
-    pub fn delete_binding(&mut self, index: DataRef) -> bool {
-        for casp in &mut self.capsules {
-            if let Some(cap) = &mut casp.capsule {
-                if let Some(data_ref) = cap.data_ref {
-                    if data_ref == index {
-                        cap.data_ref = None;
-                    }
-                }
-            }
-        }
-        self.allocator.dealloc(index)
-    }
-
     pub fn get_binding_mut<T: 'static>(&mut self, index: DataRef) -> Option<&mut T> {
         self.allocator.get_mut(index)
+    }
+
+    pub fn unbind_data(&mut self, frame_ref: CapsuleRef) -> bool {
+        if let Some(capsule) = self.get_capsule_mut(frame_ref) {
+            if let Some(data_ref) = capsule.data_ref.take() {
+                return self.allocator.dealloc(data_ref);
+            }
+        }
+        false
     }
 
     fn internal_add_frame(
@@ -407,6 +401,7 @@ impl Root {
             None => return,           // Handle is old or invalid, do nothing
         };
 
+        self.unbind_data(frame_ref);
         for child_ref in capsule.children.clone() {
             self.remove_frame(child_ref); // This call is now safe
         }
