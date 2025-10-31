@@ -262,6 +262,30 @@ impl Root {
 }
 
 impl Root {
+    pub fn hit_test(&self, x: i32, y: i32) -> Option<CapsuleRef> {
+        // Iterate over all capsules in reverse (top-most first)
+        for (i, slot) in self.capsules.iter().enumerate().rev() {
+            if let Some(caps) = &slot.capsule {
+                let space = self.spaces.get(caps.space_ref).and_then(|s| s.as_ref());
+                if let Some(fs) = space {
+                    let (w, h) = (fs.width.unwrap_or(0) as i32, fs.height.unwrap_or(0) as i32);
+
+                    if x >= fs.x && x <= (fs.x + w) && y >= fs.y && y <= (fs.y + h) {
+                        return Some(CapsuleRef {
+                            id: i,
+                            generation: slot.generation,
+                        });
+                    }
+                }
+            }
+        }
+
+        // Didn't hit anything
+        None
+    }
+}
+
+impl Root {
     /// Safely gets an immutable reference to a capsule.
     fn get_capsule(&self, frame_ref: CapsuleRef) -> Option<&Capsule> {
         if let Some(slot) = self.capsules.get(frame_ref.id) {
