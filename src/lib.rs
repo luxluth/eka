@@ -3,14 +3,16 @@
 use std::collections::HashSet;
 
 use crate::{
-    arena::Arena,
+    boxalloc::Allocator,
     color::Color,
+    commands::DrawCommand,
     position::{Direction, LayoutStrategy, Position},
     sizing::{Padding, SizeSpec},
 };
 
-mod arena;
+mod boxalloc;
 pub mod color;
+pub mod commands;
 pub mod macros;
 pub mod position;
 pub mod sizing;
@@ -118,7 +120,7 @@ pub struct Root {
 
     pub(crate) dirties: HashSet<usize>,
 
-    pub(crate) arena: Arena,
+    pub(crate) allocator: Allocator,
 }
 
 impl std::ops::Index<Capsule> for Vec<Style> {
@@ -172,7 +174,7 @@ impl Root {
             styles: vec![],
             capsules: vec![],
             dirties: HashSet::new(),
-            arena: Arena::new(),
+            allocator: Allocator::new(),
         }
     }
 
@@ -180,20 +182,35 @@ impl Root {
         &self.capsules[parent_ref].children
     }
 
-    pub fn get_binding_for_frame<T>(&mut self, frame: &Frame) -> Option<&mut T> {
+    pub fn get_binding_for_frame<T: 'static>(&mut self, frame: &Frame) -> Option<&T> {
         if let Some(data_idx) = self.capsules[frame.capsule_ref].data_ref {
-            return self.arena.get(data_idx);
+            return self.allocator.get(data_idx);
         } else {
             None
         }
     }
 
-    pub fn set_binding<T>(&mut self, data: T) -> DataRef {
-        self.arena.alloc(data)
+    pub fn set_binding<T: 'static>(&mut self, data: T) -> DataRef {
+        self.allocator.alloc(data)
     }
 
-    pub fn get_binding<T>(&self, index: DataRef) -> Option<&mut T> {
-        self.arena.get(index)
+    pub fn get_binding<T: 'static>(&self, index: DataRef) -> Option<&T> {
+        self.allocator.get(index)
+    }
+
+    pub fn delete_binding(&mut self, index: DataRef) -> bool {
+        for casp in &mut self.capsules {
+            if let Some(data_ref) = casp.data_ref {
+                if data_ref == index {
+                    casp.data_ref = None;
+                }
+            }
+        }
+        self.allocator.dealloc(index)
+    }
+
+    pub fn get_binding_mut<T: 'static>(&mut self, index: DataRef) -> Option<&mut T> {
+        self.allocator.get_mut(index)
     }
 
     fn internal_add_frame(
@@ -604,6 +621,28 @@ impl Root {
         space.height = Some(desired_h);
 
         (desired_w, desired_h)
+    }
+}
+
+impl Root {
+    pub fn commands(&self) -> Vec<DrawCommand> {
+        use DrawCommand::*;
+
+        let mut cmds = vec![];
+        for frame in &self.capsules {
+            let st = self.styles[frame];
+            let fs = self.spaces[frame];
+            cmds.push(Rectangle {
+                x: fs.x,
+                y: fs.y,
+                width: fs.width.unwrap_or(0),
+                height: fs.height.unwrap_or(0),
+                color: st.background_color,
+                z_index: st.z_index,
+            });
+        }
+
+        return cmds;
     }
 }
 

@@ -17,13 +17,13 @@ fn main() {
     let frame: BoxElement = root.add_frame_child(&frame1, None);
     style!(frame, &mut root, {
         background_color: color!(risd_blue),
-        width: size!(50 %),
+        width: size!(fill),
     });
 
     let frame: BoxElement = root.add_frame_child(&frame1, None);
     style!(frame, &mut root, {
         background_color: color!(dodger_blue),
-        width: size!(50 %),
+        width: size!(fill),
     });
 
     let now = Instant::now();
@@ -32,4 +32,6 @@ fn main() {
     eprintln!("operation took {elapsed:?}");
 
     root.debug_layout_tree();
+
+    println!("commands: {:?}", root.commands());
 }
