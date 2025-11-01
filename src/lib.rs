@@ -539,8 +539,12 @@ impl Root {
         let mut in_flow_children = Vec::new();
         let mut total_base_w = 0.0;
         let mut total_base_h = 0.0;
+
         let mut total_grow_factor_w = 0.0;
         let mut total_grow_factor_h = 0.0;
+
+        let mut total_weighted_shrink_w = 0.0;
+        let mut total_weighted_shrink_h = 0.0;
 
         for &child_ref in &capsule.children {
             let (child_style, child_space) = match self.get_capsule(child_ref).and_then(|cap| {
@@ -554,6 +558,10 @@ impl Root {
 
             if child_style.position == Position::Auto {
                 in_flow_children.push(child_ref);
+
+                let base_w = child_space.width.unwrap() as f32;
+                let base_h = child_space.height.unwrap() as f32;
+
                 let (child_desired_w, child_desired_h) = (
                     child_space.width.unwrap() as f32,  // Use f32
                     child_space.height.unwrap() as f32, // Use f32
@@ -565,11 +573,13 @@ impl Root {
                         total_base_w += child_desired_w;
                     }
                     total_grow_factor_w += child_style.flex_grow;
+                    total_weighted_shrink_w += child_style.flex_shrink * base_w;
                 } else {
                     if !child_style.height.is_fill() && !child_style.height.is_percent() {
                         total_base_h += child_desired_h;
                     }
                     total_grow_factor_h += child_style.flex_grow;
+                    total_weighted_shrink_h += child_style.flex_shrink * base_h;
                 }
             }
         }
@@ -590,18 +600,36 @@ impl Root {
         let remaining_w = (content_w as f32) - total_base_w - total_gap_w;
         let remaining_h = (content_h as f32) - total_base_h - total_gap_h;
 
-        // Avoid division by zero if total_grow_factor is 0
-        let grow_per_factor_w = if total_grow_factor_w > 0.0 {
-            remaining_w / total_grow_factor_w
-        } else {
-            0.0
-        };
+        // These will store our "per-point" ratios
+        let mut grow_per_factor_w = 0.0;
+        let mut grow_per_factor_h = 0.0;
+        let mut shrink_ratio_w = 0.0;
+        let mut shrink_ratio_h = 0.0;
 
-        let grow_per_factor_h = if total_grow_factor_h > 0.0 {
-            remaining_h / total_grow_factor_h
-        } else {
-            0.0
-        };
+        if remaining_w > 0.0 {
+            // GROW LOGIC
+            if total_grow_factor_w > 0.0 {
+                grow_per_factor_w = remaining_w / total_grow_factor_w;
+            }
+        } else if remaining_w < 0.0 {
+            // SHRINK LOGIC
+            let overflow_amount = -remaining_w; // e.g., 100px overflow
+            if total_weighted_shrink_w > 0.0 {
+                // This is our "shrink multiplier"
+                shrink_ratio_w = overflow_amount / total_weighted_shrink_w;
+            }
+        }
+
+        if remaining_h > 0.0 {
+            if total_grow_factor_h > 0.0 {
+                grow_per_factor_h = remaining_h / total_grow_factor_h;
+            }
+        } else if remaining_h < 0.0 {
+            let overflow_amount = -remaining_h;
+            if total_weighted_shrink_h > 0.0 {
+                shrink_ratio_h = overflow_amount / total_weighted_shrink_h;
+            }
+        }
 
         // --- 7. Recurse and Arrange All Children ---
         let mut current_x = content_x;
@@ -636,8 +664,8 @@ impl Root {
                 Position::Auto => {
                     // This child is "in-flow".
                     let (child_given_x, child_given_y, child_given_w, child_given_h);
-                    let child_desired_w_f32 = child_desired_w as f32;
-                    let child_desired_h_f32 = child_desired_h as f32;
+                    let base_w = child_desired_w as f32;
+                    let base_h = child_desired_h as f32;
 
                     match style.layout {
                         LayoutStrategy::Flex => match style.flow {
@@ -645,12 +673,18 @@ impl Root {
                                 child_given_x = current_x;
                                 child_given_y = current_y;
 
-                                let grow_amount_w = child_style.flex_grow * grow_per_factor_w;
+                                let final_child_w = if remaining_w > 0.0 {
+                                    base_w + (child_style.flex_grow * grow_per_factor_w) // Grow
+                                } else if remaining_w < 0.0 {
+                                    let weighted_shrink = child_style.flex_shrink * base_w; // Shrink
+                                    base_w - (weighted_shrink * shrink_ratio_w)
+                                } else {
+                                    base_w // Fits perfectly
+                                };
+
                                 child_given_w = match child_style.width {
-                                    // Percent is based on parent's content_w
                                     SizeSpec::Percent(_) => content_w,
-                                    // All other specs use their base size + grow
-                                    _ => (child_desired_w_f32 + grow_amount_w) as u32,
+                                    _ => final_child_w as u32,
                                 };
                                 child_given_h = content_h; // Flex row items fill height
                             }
@@ -659,10 +693,18 @@ impl Root {
                                 child_given_y = current_y;
                                 child_given_w = content_w; // Flex col items fill width
 
-                                let grow_amount_h = child_style.flex_grow * grow_per_factor_h;
+                                let final_child_h = if remaining_h > 0.0 {
+                                    base_h + (child_style.flex_grow * grow_per_factor_h) // Grow
+                                } else if remaining_h < 0.0 {
+                                    let weighted_shrink = child_style.flex_shrink * base_h; // Shrink
+                                    base_h - (weighted_shrink * shrink_ratio_h)
+                                } else {
+                                    base_h // Fits perfectly
+                                };
+
                                 child_given_h = match child_style.height {
                                     SizeSpec::Percent(_) => content_h,
-                                    _ => (child_desired_h_f32 + grow_amount_h) as u32,
+                                    _ => final_child_h as u32,
                                 };
                             }
                         },
