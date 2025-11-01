@@ -43,7 +43,7 @@ fn main() {
     style!(frame, &mut root, {
         background_color: color!(dodger_blue),
         width: size!(fill),
-        flex_grow: 1.0,
+        flex_grow: 2.0,
     });
 
     let now = Instant::now();
