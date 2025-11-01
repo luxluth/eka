@@ -115,7 +115,7 @@ impl Frame {
     }
 }
 
-#[derive(Debug, Default, Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 pub struct Style {
     /// Informative style only. Depending on the Frame
     /// type, this information may be taken into consideration for
@@ -128,6 +128,14 @@ pub struct Style {
 
     /// Padding setted for a Frame element
     pub padding: Padding,
+
+    /// Defines how much a flex item will grow.
+    /// Default is 0.0 (don't grow).
+    pub flex_grow: f32,
+
+    /// Defines how much a flex item will shrink.
+    /// Default is 1.0 (shrink at a normal rate).
+    pub flex_shrink: f32,
 
     /// Define the layout to use for position children
     pub layout: LayoutStrategy,
@@ -143,6 +151,25 @@ pub struct Style {
     /// Note: If elements have the same z-index, will be
     /// drawn first the one that appears first in the tree.
     pub z_index: u32,
+}
+
+impl Default for Style {
+    fn default() -> Self {
+        Self {
+            background_color: Color::default(),
+            width: SizeSpec::default(),
+            height: SizeSpec::default(),
+            padding: Padding::default(),
+            layout: LayoutStrategy::default(),
+            flow: Direction::default(),
+            position: Position::default(),
+            gap: 0,
+            z_index: 0,
+
+            flex_grow: 0.0,
+            flex_shrink: 1.0,
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -510,14 +537,13 @@ impl Root {
         // --- 5. Pre-pass: Analyze In-Flow Children for Flex 'Fill' ---
         // We need to know how many `Fill` children we have to divide space.
         let mut in_flow_children = Vec::new();
-        let mut total_non_fill_w = 0;
-        let mut total_non_fill_h = 0;
-        let mut fill_w_count = 0;
-        let mut fill_h_count = 0;
+        let mut total_base_w = 0.0;
+        let mut total_base_h = 0.0;
+        let mut total_grow_factor_w = 0.0;
+        let mut total_grow_factor_h = 0.0;
 
         for &child_ref in &capsule.children {
             let (child_style, child_space) = match self.get_capsule(child_ref).and_then(|cap| {
-                // Chain getters: get capsule, then its style and space
                 let style = self.styles[cap.style_ref].as_ref()?;
                 let space = self.spaces[cap.space_ref].as_ref()?;
                 Some((style, space))
@@ -528,21 +554,22 @@ impl Root {
 
             if child_style.position == Position::Auto {
                 in_flow_children.push(child_ref);
-                let (child_desired_w, child_desired_h) =
-                    (child_space.width.unwrap(), child_space.height.unwrap());
+                let (child_desired_w, child_desired_h) = (
+                    child_space.width.unwrap() as f32,  // Use f32
+                    child_space.height.unwrap() as f32, // Use f32
+                );
 
                 if style.flow == Direction::Row {
-                    if child_style.width.is_fill() {
-                        fill_w_count += 1;
-                    } else {
-                        total_non_fill_w += child_desired_w;
+                    // Add to total base size (respecting Fill/Percent)
+                    if !child_style.width.is_fill() && !child_style.width.is_percent() {
+                        total_base_w += child_desired_w;
                     }
+                    total_grow_factor_w += child_style.flex_grow;
                 } else {
-                    if child_style.height.is_fill() {
-                        fill_h_count += 1;
-                    } else {
-                        total_non_fill_h += child_desired_h;
+                    if !child_style.height.is_fill() && !child_style.height.is_percent() {
+                        total_base_h += child_desired_h;
                     }
+                    total_grow_factor_h += child_style.flex_grow;
                 }
             }
         }
@@ -552,26 +579,28 @@ impl Root {
             style.gap * (in_flow_children.len() as u32 - 1)
         } else {
             0
-        };
+        } as f32;
 
         let total_gap_h = if style.flow == Direction::Column && !in_flow_children.is_empty() {
             style.gap * (in_flow_children.len() as u32 - 1)
         } else {
             0
+        } as f32;
+
+        let remaining_w = (content_w as f32) - total_base_w - total_gap_w;
+        let remaining_h = (content_h as f32) - total_base_h - total_gap_h;
+
+        // Avoid division by zero if total_grow_factor is 0
+        let grow_per_factor_w = if total_grow_factor_w > 0.0 {
+            remaining_w / total_grow_factor_w
+        } else {
+            0.0
         };
 
-        let remaining_w = content_w.saturating_sub(total_non_fill_w + total_gap_w);
-        let remaining_h = content_h.saturating_sub(total_non_fill_h + total_gap_h);
-
-        let fill_w_each = if fill_w_count > 0 {
-            remaining_w / fill_w_count
+        let grow_per_factor_h = if total_grow_factor_h > 0.0 {
+            remaining_h / total_grow_factor_h
         } else {
-            0
-        };
-        let fill_h_each = if fill_h_count > 0 {
-            remaining_h / fill_h_count
-        } else {
-            0
+            0.0
         };
 
         // --- 7. Recurse and Arrange All Children ---
@@ -607,6 +636,8 @@ impl Root {
                 Position::Auto => {
                     // This child is "in-flow".
                     let (child_given_x, child_given_y, child_given_w, child_given_h);
+                    let child_desired_w_f32 = child_desired_w as f32;
+                    let child_desired_h_f32 = child_desired_h as f32;
 
                     match style.layout {
                         LayoutStrategy::Flex => match style.flow {
@@ -614,12 +645,13 @@ impl Root {
                                 child_given_x = current_x;
                                 child_given_y = current_y;
 
+                                let grow_amount_w = child_style.flex_grow * grow_per_factor_w;
                                 child_given_w = match child_style.width {
-                                    SizeSpec::Fill => fill_w_each,
-                                    SizeSpec::Percent(_) => content_w, // Give it full content box
-                                    _ => child_desired_w,
+                                    // Percent is based on parent's content_w
+                                    SizeSpec::Percent(_) => content_w,
+                                    // All other specs use their base size + grow
+                                    _ => (child_desired_w_f32 + grow_amount_w) as u32,
                                 };
-
                                 child_given_h = content_h; // Flex row items fill height
                             }
                             Direction::Column => {
@@ -627,10 +659,10 @@ impl Root {
                                 child_given_y = current_y;
                                 child_given_w = content_w; // Flex col items fill width
 
+                                let grow_amount_h = child_style.flex_grow * grow_per_factor_h;
                                 child_given_h = match child_style.height {
-                                    SizeSpec::Fill => fill_h_each,
                                     SizeSpec::Percent(_) => content_h,
-                                    _ => child_desired_h,
+                                    _ => (child_desired_h_f32 + grow_amount_h) as u32,
                                 };
                             }
                         },

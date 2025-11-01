@@ -18,20 +18,14 @@ fn main() {
     style!(frame, &mut root, {
         background_color: color!(risd_blue),
         width: size!(fill),
+        flex_grow: 1.0,
     });
 
     let frame: Frame = root.add_frame_child(&root_frame, None);
     style!(frame, &mut root, {
         background_color: color!(dodger_blue),
         width: size!(fill),
-    });
-
-    root.remove_frame(frame.get_ref());
-
-    let frame: Frame = root.add_frame_child(&root_frame, None);
-    style!(frame, &mut root, {
-        background_color: color!(dodger_blue),
-        width: size!(fill),
+        flex_grow: 1.0,
     });
 
     root.remove_frame(frame.get_ref());
@@ -40,6 +34,16 @@ fn main() {
     style!(frame, &mut root, {
         background_color: color!(dodger_blue),
         width: size!(fill),
+        flex_grow: 1.0,
+    });
+
+    root.remove_frame(frame.get_ref());
+
+    let frame: Frame = root.add_frame_child(&root_frame, None);
+    style!(frame, &mut root, {
+        background_color: color!(dodger_blue),
+        width: size!(fill),
+        flex_grow: 1.0,
     });
 
     let now = Instant::now();
