@@ -62,6 +62,9 @@ macro_rules! layout {
     (grid) => {
         $crate::position::LayoutStrategy::Grid
     };
+    (no_layout) => {
+        $crate::position::LayoutStrategy::NoStrategy
+    };
 }
 
 /// Indicates a layout direction (row, column)

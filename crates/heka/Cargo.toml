@@ -3,12 +3,12 @@ name = "heka"
 edition.workspace = true
 version.workspace = true
 authors.workspace = true
-description.workspace = true
+description = "eka ui computing library"
 
 [dependencies]
 ansi_term = { workspace = true, optional = true}
 
 
 [features]
-default = ["debug"]
+default = []
 debug = ["ansi_term"]

@@ -46,6 +46,7 @@ impl Space {
     }
 }
 
+/// A reference to an internal data element
 pub type DataRef = usize;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -69,6 +70,7 @@ pub struct Capsule {
     children: Vec<CapsuleRef>,
 }
 
+/// Describe a frame box element
 #[derive(Debug, Clone, Copy)]
 pub struct Frame {
     capsule_ref: CapsuleRef,
@@ -147,6 +149,14 @@ pub struct Style {
     /// Position relative to the parent element
     pub position: Position,
 
+    /// The intrinsic content width, as measured by a component.
+    /// This is used by `SizeSpec::Fit`.
+    pub intrinsic_width: Option<u32>,
+
+    /// The intrinsic content height, as measured by a component.
+    /// This is used by `SizeSpec::Fit`.
+    pub intrinsic_height: Option<u32>,
+
     /// Draw order change. Higher the later
     /// Note: If elements have the same z-index, will be
     /// drawn first the one that appears first in the tree.
@@ -168,6 +178,9 @@ impl Default for Style {
 
             flex_grow: 0.0,
             flex_shrink: 1.0,
+
+            intrinsic_width: None,
+            intrinsic_height: None,
         }
     }
 }
@@ -222,6 +235,34 @@ impl Root {
             }
         }
         false
+    }
+
+    pub fn set_parent(&mut self, child_frame: Frame, new_parent_frame: Frame) {
+        let child_ref = child_frame.get_ref(); // Get the CapsuleRef
+
+        // Remove child from its old parent's list
+        let old_parent_ref = self.get_capsule(child_ref).and_then(|c| c.parent_ref);
+
+        if let Some(old_parent_ref) = old_parent_ref {
+            if let Some(old_parent_capsule) = self.get_capsule_mut(old_parent_ref) {
+                // Remove the child from the old parent's children
+                old_parent_capsule.children.retain(|&c| c != child_ref);
+            }
+            self.set_dirty(old_parent_ref); // Old parent's layout is now invalid
+        }
+
+        // Add child to new parent's list
+        let new_parent_ref = new_parent_frame.get_ref();
+        if let Some(new_parent_capsule) = self.get_capsule_mut(new_parent_ref) {
+            new_parent_capsule.children.push(child_ref);
+        }
+
+        // Update the child's own parent reference
+        if let Some(child_capsule) = self.get_capsule_mut(child_ref) {
+            child_capsule.parent_ref = Some(new_parent_ref);
+        }
+
+        self.set_dirty(new_parent_ref);
     }
 
     fn internal_add_frame(
@@ -802,51 +843,56 @@ impl Root {
         // --- 2. Calculate This Node's "Content" Size ---
         let (mut content_w, mut content_h);
 
-        // Calculate content size based on children (if we are `Fit`)
-        match style.layout {
-            LayoutStrategy::Flex => {
-                match style.flow {
-                    Direction::Row => {
-                        // Width is sum of child widths + gaps
-                        content_w = in_flow_child_sizes.iter().map(|(w, _)| *w).sum();
-                        if !in_flow_child_sizes.is_empty() {
-                            content_w += style.gap * (in_flow_child_sizes.len() as u32 - 1);
+        if !capsule.children.is_empty() {
+            // Calculate content size based on children (if we are `Fit`)
+            match style.layout {
+                LayoutStrategy::Flex => {
+                    match style.flow {
+                        Direction::Row => {
+                            // Width is sum of child widths + gaps
+                            content_w = in_flow_child_sizes.iter().map(|(w, _)| *w).sum();
+                            if !in_flow_child_sizes.is_empty() {
+                                content_w += style.gap * (in_flow_child_sizes.len() as u32 - 1);
+                            }
+                            // Height is max of child heights
+                            content_h = in_flow_child_sizes
+                                .iter()
+                                .map(|(_, h)| *h)
+                                .max()
+                                .unwrap_or(0);
                         }
-                        // Height is max of child heights
-                        content_h = in_flow_child_sizes
-                            .iter()
-                            .map(|(_, h)| *h)
-                            .max()
-                            .unwrap_or(0);
-                    }
-                    Direction::Column => {
-                        // Width is max of child widths
-                        content_w = in_flow_child_sizes
-                            .iter()
-                            .map(|(w, _)| *w)
-                            .max()
-                            .unwrap_or(0);
-                        // Height is sum of child heights + gaps
-                        content_h = in_flow_child_sizes.iter().map(|(_, h)| *h).sum();
-                        if !in_flow_child_sizes.is_empty() {
-                            content_h += style.gap * (in_flow_child_sizes.len() as u32 - 1);
+                        Direction::Column => {
+                            // Width is max of child widths
+                            content_w = in_flow_child_sizes
+                                .iter()
+                                .map(|(w, _)| *w)
+                                .max()
+                                .unwrap_or(0);
+                            // Height is sum of child heights + gaps
+                            content_h = in_flow_child_sizes.iter().map(|(_, h)| *h).sum();
+                            if !in_flow_child_sizes.is_empty() {
+                                content_h += style.gap * (in_flow_child_sizes.len() as u32 - 1);
+                            }
                         }
                     }
                 }
+                LayoutStrategy::NoStrategy | LayoutStrategy::Grid => {
+                    // Default: size is the max of any child
+                    content_w = in_flow_child_sizes
+                        .iter()
+                        .map(|(w, _)| *w)
+                        .max()
+                        .unwrap_or(0);
+                    content_h = in_flow_child_sizes
+                        .iter()
+                        .map(|(_, h)| *h)
+                        .max()
+                        .unwrap_or(0);
+                }
             }
-            LayoutStrategy::NoStrategy | LayoutStrategy::Grid => {
-                // Default: size is the max of any child
-                content_w = in_flow_child_sizes
-                    .iter()
-                    .map(|(w, _)| *w)
-                    .max()
-                    .unwrap_or(0);
-                content_h = in_flow_child_sizes
-                    .iter()
-                    .map(|(_, h)| *h)
-                    .max()
-                    .unwrap_or(0);
-            }
+        } else {
+            content_w = style.intrinsic_width.unwrap_or(0);
+            content_h = style.intrinsic_height.unwrap_or(0);
         }
 
         // --- 3. Determine Final Desired Size Based on Style ---

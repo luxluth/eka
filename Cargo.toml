@@ -9,5 +9,6 @@ authors = ["luxluth <delphin.blehoussi93@gmail.com>"]
 description = "eka GUI toolkit"
 
 [workspace.dependencies]
-ansi_term = { version = "0.12.1" }
-
+ansi_term =  "0.12.1"
+winit = "0.30.12"
+cosmic-text = "0.15.0"

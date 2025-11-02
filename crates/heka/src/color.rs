@@ -1,7 +1,7 @@
 #![allow(non_upper_case_globals)]
 
 /// RGBA defined color values
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub struct Color {
     pub r: u8,
     pub g: u8,
@@ -16,6 +16,17 @@ impl std::fmt::Debug for Color {
 }
 
 impl Color {
+    pub fn new(r: u8, g: u8, b: u8, a: u8) -> Self {
+        Self { r, g, b, a }
+    }
+
+    #[inline]
+    pub const fn as_u32(&self) -> u32 {
+        ((self.a as u32) << 24) | ((self.r as u32) << 16) | ((self.g as u32) << 8) | (self.b as u32)
+    }
+}
+
+impl Color {
     /// Red color
     pub const red: Color = Color {
         r: 255,
@@ -23,6 +34,7 @@ impl Color {
         b: 0,
         a: 255,
     };
+
     /// White color
     pub const white: Color = Color {
         r: 255,
@@ -30,6 +42,15 @@ impl Color {
         b: 255,
         a: 255,
     };
+
+    /// Black color
+    pub const black: Color = Color {
+        r: 0,
+        g: 0,
+        b: 0,
+        a: 255,
+    };
+
     /// DodgerBlue - a nice color
     pub const dodger_blue: Color = Color {
         r: 30,
