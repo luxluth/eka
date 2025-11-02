@@ -1,11 +1,13 @@
-[package]
-name = "heka"
-version = "0.1.0"
+[workspace]
+members = ["crates/*"]
+resolver = "3"
+
+[workspace.package]
+version = "0.0.1"
 edition = "2024"
+authors = ["luxluth <delphin.blehoussi93@gmail.com>"]
+description = "eka GUI toolkit"
 
-[dependencies]
-ansi_term = { version = "0.12.1", optional = true }
+[workspace.dependencies]
+ansi_term = { version = "0.12.1" }
 
-[features]
-default = ["debug"]
-debug = ["ansi_term"]

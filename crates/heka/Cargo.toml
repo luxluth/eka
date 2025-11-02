@@ -1,0 +1,14 @@
+[package]
+name = "heka"
+edition.workspace = true
+version.workspace = true
+authors.workspace = true
+description.workspace = true
+
+[dependencies]
+ansi_term = { workspace = true, optional = true}
+
+
+[features]
+default = ["debug"]
+debug = ["ansi_term"]
