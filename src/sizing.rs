@@ -149,24 +149,4 @@ impl Padding {
     pub fn is_zero(&self) -> bool {
         self.left == 0 && self.right == 0 && self.top == 0 && self.bottom == 0
     }
-
-    // #[inline]
-    // pub fn apply_left(&self, left: &mut u32) {
-    //     *left = self.left;
-    // }
-    //
-    // #[inline]
-    // pub fn apply_right(&self, right: &mut u32) {
-    //     *right = self.right;
-    // }
-    //
-    // #[inline]
-    // pub fn apply_top(&self, top: &mut u32) {
-    //     *top = self.top;
-    // }
-    //
-    // #[inline]
-    // pub fn apply_bottom(&self, bottom: &mut u32) {
-    //     *bottom = self.bottom;
-    // }
 }

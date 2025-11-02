@@ -18,7 +18,7 @@ pub mod position;
 pub mod sizing;
 
 #[derive(Debug, Clone, Copy)]
-pub(crate) struct Space {
+pub struct Space {
     pub x: i32,
     pub y: i32,
     pub width: Option<u32>,
@@ -55,17 +55,17 @@ pub struct CapsuleRef {
 }
 
 #[derive(Debug, Clone, Default)]
-struct CapsuleSlot {
-    capsule: Option<Capsule>,
+pub struct CapsuleSlot {
+    pub capsule: Option<Capsule>,
     generation: u32,
 }
 
 #[derive(Debug, Clone)]
-struct Capsule {
-    space_ref: usize,
-    parent_ref: Option<CapsuleRef>,
-    style_ref: usize,
-    data_ref: Option<DataRef>,
+pub struct Capsule {
+    pub space_ref: usize,
+    pub parent_ref: Option<CapsuleRef>,
+    pub style_ref: usize,
+    pub data_ref: Option<DataRef>,
     children: Vec<CapsuleRef>,
 }
 
@@ -174,14 +174,13 @@ impl Default for Style {
 
 #[derive(Debug)]
 pub struct Root {
-    capsules: Vec<CapsuleSlot>,
+    pub capsules: Vec<CapsuleSlot>,
     capsule_free_list: VecDeque<usize>,
-    spaces: Vec<Option<Space>>,
+    pub spaces: Vec<Option<Space>>,
     styles: Vec<Option<Style>>,
 
-    pub(crate) dirties: HashSet<CapsuleRef>,
-
-    pub(crate) allocator: Allocator,
+    dirties: HashSet<CapsuleRef>,
+    allocator: Allocator,
 }
 
 impl Root {
