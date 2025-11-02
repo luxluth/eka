@@ -16,18 +16,14 @@ pub struct Label {
     pub text_style: TextStyle,
 }
 
+#[rustfmt::skip]
 impl FrameElement for Label {
-    fn get_frame(&self) -> heka::Frame {
-        self.frame
-    }
+    fn get_frame(&self) -> heka::Frame { self.frame }
+    fn data_ref(&self) -> Option<heka::DataRef> { Some(self.buffer_ref) }
+    fn name(&self) -> &str { "[LABEL]" }
 
-    fn data_ref(&self) -> Option<heka::DataRef> {
-        Some(self.buffer_ref)
-    }
-
-    fn name(&self) -> &str {
-        "[LABEL]"
-    }
+    fn as_any(&self) -> &dyn std::any::Any { self }
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }
 }
 
 impl Label {

@@ -49,10 +49,16 @@ impl Space {
 /// A reference to an internal data element
 pub type DataRef = usize;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct CapsuleRef {
     id: usize,
     generation: u32,
+}
+
+impl std::fmt::Debug for CapsuleRef {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}@{}", self.id, self.generation)
+    }
 }
 
 #[derive(Debug, Clone, Default)]
@@ -238,7 +244,7 @@ impl Root {
     }
 
     pub fn set_parent(&mut self, child_frame: Frame, new_parent_frame: Frame) {
-        let child_ref = child_frame.get_ref(); // Get the CapsuleRef
+        let child_ref = child_frame.get_ref();
 
         // Remove child from its old parent's list
         let old_parent_ref = self.get_capsule(child_ref).and_then(|c| c.parent_ref);
@@ -1003,7 +1009,7 @@ impl Root {
         let error_s = Style::new().fg(ansi_term::Color::Red);
 
         // This is the new, more descriptive ref
-        let cref_str = format!("{}@{}", cref.id, cref.generation);
+        let cref_str = format!("{cref:?}");
 
         // Correctly determine tree-drawing characters
         let branch_char = if is_last { "└" } else { "├" };
