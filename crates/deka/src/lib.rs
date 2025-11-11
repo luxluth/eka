@@ -23,7 +23,7 @@ pub struct DAL {
     elements: HashMap<heka::CapsuleRef, Box<dyn FrameElement>>,
     callbacks: HashMap<heka::CapsuleRef, Box<dyn FnMut(&mut DAL, &ClickEvent)>>,
 
-    resizable: bool,
+    attr: WindowAttr,
 
     pub font_system: FontSystem,
     pub swash_cache: SwashCache,
@@ -48,8 +48,23 @@ impl Element {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct WindowAttr {
+    pub resizable: bool,
+    pub title: String,
+}
+
+impl Default for WindowAttr {
+    fn default() -> Self {
+        Self {
+            resizable: false,
+            title: String::from("heka, deka, heka, eve"),
+        }
+    }
+}
+
 impl DAL {
-    pub fn new(width: u32, height: u32, resizable: bool) -> Self {
+    pub fn new(width: u32, height: u32, attr: WindowAttr) -> Self {
         let mut root = heka::Root::new(width, height);
         let root_frame = root.add_frame(None);
         let root_panel = Panel { frame: root_frame };
@@ -71,7 +86,7 @@ impl DAL {
             font_system: FontSystem::new(),
             swash_cache: SwashCache::new(),
 
-            resizable,
+            attr,
         }
     }
 

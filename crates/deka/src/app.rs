@@ -210,7 +210,12 @@ impl ApplicationHandler for Application {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         let window = Arc::new(
             event_loop
-                .create_window(Window::default_attributes().with_resizable(self.dal.resizable))
+                .create_window(
+                    Window::default_attributes()
+                        .with_resizable(self.dal.attr.resizable)
+                        .with_title(&self.dal.attr.title)
+                        .with_decorations(false),
+                )
                 .unwrap(),
         );
 
