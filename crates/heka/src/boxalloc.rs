@@ -31,9 +31,8 @@ impl Allocator {
     pub fn dealloc(&mut self, id: usize) -> bool {
         if let Some(slot) = self.slots.get_mut(id) {
             if slot.is_some() {
-                // This is the magic. Taking the `Option` out
-                // and replacing it with `None` drops the `Box<dyn Any>`,
-                // which frees the memory.
+                // NOTE: Taking the `Option` out and replacing it with `None`
+                // drops the `Box<dyn Any>`, which frees the memory.
                 *slot = None;
                 self.free_list.push_back(id);
                 true

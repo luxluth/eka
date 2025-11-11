@@ -5,14 +5,12 @@ use std::collections::{HashSet, VecDeque};
 use crate::{
     boxalloc::Allocator,
     color::Color,
-    commands::{Command, Drawing},
     position::{Direction, LayoutStrategy, Position},
     sizing::{Padding, SizeSpec},
 };
 
 mod boxalloc;
 pub mod color;
-pub mod commands;
 pub mod macros;
 pub mod position;
 pub mod sizing;
@@ -940,37 +938,6 @@ impl Root {
         }
 
         (desired_w, desired_h)
-    }
-}
-
-impl Root {
-    pub fn commands(&self) -> Vec<Command> {
-        use Drawing::*;
-
-        let mut cmds = vec![];
-        for frame in &self.capsules {
-            if let Some(caps) = &frame.capsule {
-                let style = self.styles.get(caps.style_ref).and_then(|s| s.as_ref());
-                let space = self.spaces.get(caps.space_ref).and_then(|s| s.as_ref());
-
-                if let (Some(st), Some(fs)) = (style, space) {
-                    cmds.push(Command {
-                        z_index: st.z_index,
-                        desc: Rectangle {
-                            x: fs.x,
-                            y: fs.y,
-                            width: fs.width.unwrap_or(0),
-                            height: fs.height.unwrap_or(0),
-                            color: st.background_color,
-                        },
-                    });
-                }
-            }
-        }
-
-        cmds.sort_by_key(|cmd| cmd.z_index);
-
-        return cmds;
     }
 }
 
