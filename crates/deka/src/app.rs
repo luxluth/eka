@@ -214,6 +214,10 @@ impl ApplicationHandler for Application {
                     Window::default_attributes()
                         .with_resizable(self.dal.attr.resizable)
                         .with_title(&self.dal.attr.title)
+                        .with_inner_size(PhysicalSize::new(
+                            self.dal.attr.size.0,
+                            self.dal.attr.size.1,
+                        ))
                         .with_decorations(false),
                 )
                 .unwrap(),

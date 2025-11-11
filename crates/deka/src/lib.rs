@@ -52,6 +52,7 @@ impl Element {
 pub struct WindowAttr {
     pub resizable: bool,
     pub title: String,
+    pub size: (u32, u32),
 }
 
 impl Default for WindowAttr {
@@ -59,13 +60,15 @@ impl Default for WindowAttr {
         Self {
             resizable: false,
             title: String::from("heka, deka, heka, eve"),
+            size: (800, 600),
         }
     }
 }
 
 impl DAL {
-    pub fn new(width: u32, height: u32, attr: WindowAttr) -> Self {
+    pub fn new(width: u32, height: u32, mut attr: WindowAttr) -> Self {
         let mut root = heka::Root::new(width, height);
+        attr.size = (width, height);
         let root_frame = root.add_frame(None);
         let root_panel = Panel { frame: root_frame };
 

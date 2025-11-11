@@ -1,14 +1,7 @@
-use deka::{DAL, WindowAttr};
+use deka::DAL;
 
 fn main() {
-    let mut dal = DAL::new(
-        600,
-        800,
-        WindowAttr {
-            resizable: true,
-            ..WindowAttr::default()
-        },
-    );
+    let mut dal = DAL::new(600, 800, Default::default());
     let label = dal.new_label("Hello, Eka!", None, None);
     println!("{label:?}");
 
