@@ -510,13 +510,12 @@ impl Root {
         self.styles[capsule.style_ref] = None;
         self.dirties.remove(&frame_ref);
 
-        // --- 5. THIS IS THE MAGIC ---
-        // Get the slot, `take()` the capsule, and increment the generation
+        // NOTE: Get the slot, `take()` the capsule, and increment the generation
         let slot = &mut self.capsules[frame_ref.id];
         slot.capsule = None; // The capsule is now gone
         slot.generation = slot.generation.wrapping_add(1); // Increment generation
 
-        // --- 6. Add the ID to the free list for recycling ---
+        // Add the ID to the free list for recycling
         self.capsule_free_list.push_back(frame_ref.id);
     }
 }
