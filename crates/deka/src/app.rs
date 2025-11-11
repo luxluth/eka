@@ -129,8 +129,8 @@ impl Application {
             })
             .expect("No suitable physical device found");
 
-        println!(
-            "[VULKAN] using device: {} (type: {:?})",
+        eprintln!(
+            "[debug::vulkan]: using device: {} (type: {:?})",
             physical_device.properties().device_name,
             physical_device.properties().device_type,
         );
@@ -399,7 +399,7 @@ impl ApplicationHandler for Application {
                         rcx.recreate_swapchain = true;
                         return;
                     }
-                    Err(e) => panic!("[VULKAN] failed to acquire next image: {e}"),
+                    Err(e) => panic!("[error::vulkan]: failed to acquire next image: {e}"),
                 };
 
                 if suboptimal {
@@ -432,11 +432,17 @@ impl ApplicationHandler for Application {
                     .bind_pipeline_graphics(rcx.pipeline.clone())
                     .unwrap();
 
+                let is_dirty = self.dal.is_dirty();
                 self.dal.compute_layout();
                 let size = [window_size.width as f32, window_size.height as f32];
-                self.gui_renderer
-                    .upload_draw_commands(&self.dal.render(), size);
+                self.gui_renderer.upload_draw_commands(
+                    &self.dal.render(),
+                    size,
+                    is_dirty,
+                    &mut self.dal,
+                );
                 self.gui_renderer.render(&mut builder, rcx.pipeline.clone());
+
                 builder.end_render_pass(Default::default()).unwrap();
 
                 let command_buffer = builder.build().unwrap();
@@ -466,7 +472,7 @@ impl ApplicationHandler for Application {
                         rcx.previous_frame_end = Some(sync::now(self.device.clone()).boxed());
                     }
                     Err(e) => {
-                        panic!("[VULKAN] failed to flush future: {e}");
+                        panic!("[error::vulkan]: failed to flush future: {e}");
                     }
                 }
             }

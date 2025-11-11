@@ -214,6 +214,11 @@ impl Root {
         }
     }
 
+    #[inline]
+    pub fn is_dirty(&self) -> bool {
+        !self.dirties.is_empty()
+    }
+
     pub fn get_binding_for_frame<T: 'static>(&mut self, frame: &Frame) -> Option<&T> {
         self.get_capsule(frame.capsule_ref)
             .and_then(|cap| cap.data_ref)

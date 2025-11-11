@@ -214,6 +214,11 @@ impl DAL {
         event_loop.run_app(&mut application)
     }
 
+    #[inline]
+    pub fn is_dirty(&self) -> bool {
+        self.root.is_dirty()
+    }
+
     /// Compute inner layout
     pub fn compute_layout(&mut self) {
         self.root.compute();
@@ -225,8 +230,6 @@ impl DAL {
     }
 
     pub fn on_click(&mut self, x: i32, y: i32) {
-        // 1. Find what was hit in the layout engine
-        // We need to add `hit_test` to heka::Root
         let Some(hitted) = self.root.hit_test(x, y) else {
             return;
         };
