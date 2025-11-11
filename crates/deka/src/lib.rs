@@ -1,6 +1,8 @@
 use std::collections::HashMap;
 
 pub use heka;
+use heka::Frame;
+use heka::Style;
 pub use text_style::AsCosmicColor;
 pub use text_style::TextStyle;
 
@@ -45,6 +47,10 @@ pub struct Element(pub(crate) heka::CapsuleRef);
 impl Element {
     pub fn raw(&self) -> heka::CapsuleRef {
         self.0
+    }
+
+    pub fn frame(&self) -> heka::Frame {
+        Frame::define(self.0)
     }
 }
 
@@ -111,6 +117,23 @@ impl DAL {
 
         self.elements.insert(label_ref, Box::new(label));
         Element(label_ref)
+    }
+
+    pub fn new_panel(&mut self, parent_frame: Option<&heka::Frame>, style: Style) -> Element {
+        let new_frame = if let Some(parent) = parent_frame {
+            self.root.add_frame_child(parent, None)
+        } else {
+            self.root.add_frame(None)
+        };
+
+        let panel = Panel { frame: new_frame };
+
+        new_frame.update_style(&mut self.root, |s| {
+            *s = style;
+        });
+
+        self.elements.insert(panel.frame.get_ref(), Box::new(panel));
+        Element(new_frame.get_ref())
     }
 
     pub fn set_label_text(&mut self, element: Element, new_text: String) {

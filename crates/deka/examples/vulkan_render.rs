@@ -1,4 +1,6 @@
+use cosmic_text::Weight;
 use deka::{DAL, TextStyle, WindowAttr};
+use heka::{Style, color::Color, position::Direction, sizing::Padding};
 
 fn main() -> Result<(), impl std::error::Error> {
     let mut dal = DAL::new(
@@ -10,14 +12,34 @@ fn main() -> Result<(), impl std::error::Error> {
             ..WindowAttr::default()
         },
     );
-    let _ = dal.new_label(
-        "Hello from Deka!",
+
+    let panel = dal.new_panel(
         None,
+        Style {
+            flow: Direction::Column,
+            gap: 2,
+            padding: Padding::new_all(10),
+            ..Default::default()
+        },
+    );
+
+    let label = dal.new_label(
+        "Hello, Eka!",
+        Some(&panel.frame()),
         Some(TextStyle {
+            color: Color::risd_blue,
             font_size: 32.0,
-            font_family: cosmic_text::FamilyOwned::Monospace,
+            weight: Weight::BOLD,
             ..Default::default()
         }),
+    );
+
+    let _ = dal.new_button(
+        "Click Me!".to_string(),
+        Some(&panel.frame()),
+        move |dal, _event| {
+            dal.set_label_text(label, "You clicked the button!".to_string());
+        },
     );
 
     dal.debug();

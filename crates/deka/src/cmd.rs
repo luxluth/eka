@@ -79,7 +79,7 @@ impl DrawCommand {
             DrawCommand::Rect { space, color } => Self::rect_vertices(screen_size, space, color),
             DrawCommand::Text {
                 buffer_ref,
-                space: _,
+                space,
                 style,
             } => {
                 let Some(buffer) = dal.get_buffer::<Buffer>(*buffer_ref) else {
@@ -100,8 +100,8 @@ impl DrawCommand {
                         vertices.extend(Self::rect_vertices(
                             screen_size,
                             &Space {
-                                x,
-                                y,
+                                x: x + space.x,
+                                y: y + space.y,
                                 width: Some(w),
                                 height: Some(h),
                             },

@@ -81,6 +81,9 @@ pub struct Frame {
 }
 
 impl<'a> Frame {
+    pub fn define(capsule_ref: CapsuleRef) -> Self {
+        Self { capsule_ref }
+    }
     pub fn update_style<F>(&self, root: &mut Root, applier: F)
     where
         F: FnOnce(&mut Style),
