@@ -360,7 +360,7 @@ impl Root {
 
 impl Root {
     /// Safely gets an immutable reference to a capsule.
-    fn get_capsule(&self, frame_ref: CapsuleRef) -> Option<&Capsule> {
+    pub fn get_capsule(&self, frame_ref: CapsuleRef) -> Option<&Capsule> {
         if let Some(slot) = self.capsules.get(frame_ref.id) {
             if slot.generation == frame_ref.generation {
                 return slot.capsule.as_ref();
@@ -808,6 +808,24 @@ impl Root {
                 }
             }
         }
+    }
+}
+
+impl Root {
+    pub fn get_style(&self, frame_ref: CapsuleRef) -> Option<Style> {
+        self.get_capsule(frame_ref).and_then(|cap| {
+            // Chain the getters. Get capsule, then its style.
+            let style = self.styles[cap.style_ref].as_ref()?;
+            Some(style.clone())
+        })
+    }
+
+    pub fn get_space(&self, frame_ref: CapsuleRef) -> Option<Space> {
+        self.get_capsule(frame_ref).and_then(|cap| {
+            // Chain the getters. Get capsule, then its style.
+            let space = self.spaces[cap.space_ref].as_ref()?;
+            Some(space.clone())
+        })
     }
 }
 

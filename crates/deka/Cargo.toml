@@ -6,9 +6,13 @@ authors.workspace = true
 description = "eka core gui abstraction"
 
 [dependencies]
-cosmic-text = { workspace = true }
-winit = { workspace = true }
 heka = { path = "../heka/" }
+winit = { workspace = true }
+env_logger = { workspace = true }
+cosmic-text = { workspace = true }
+vulkano-util = { workspace = true }
+vulkano = { workspace = true }
+vulkano-shaders = { workspace = true }
 
 [features]
 default = ["debug"]

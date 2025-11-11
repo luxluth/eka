@@ -27,7 +27,7 @@ impl Default for TextStyle {
     }
 }
 
-trait AsCosmicColor {
+pub trait AsCosmicColor {
     fn into_cosmic(&self) -> cosmic_text::Color;
 }
 

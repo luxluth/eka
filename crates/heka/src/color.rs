@@ -86,3 +86,14 @@ impl Default for Color {
         Color::Hex(0xFFFFFFFF)
     }
 }
+
+impl From<Color> for [f32; 4] {
+    fn from(color: Color) -> Self {
+        [
+            color.r as f32 / 255.0,
+            color.g as f32 / 255.0,
+            color.b as f32 / 255.0,
+            color.a as f32 / 255.0,
+        ]
+    }
+}
