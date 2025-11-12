@@ -40,39 +40,36 @@ impl GuiRenderer {
         &mut self,
         draw_commands: &[DrawCommand],
         screen_size: [f32; 2],
-        is_dirty: bool,
         dal: &mut DAL,
     ) {
-        if is_dirty {
-            eprintln!("[debug::renderer]: command upload need");
-            let vertices: Vec<utils::TVertex> = draw_commands
-                .iter()
-                .flat_map(|cmd| cmd.to_vertices(screen_size, dal))
-                .collect();
-            eprintln!("[debug::renderer]: upload of ({}) vertices", vertices.len());
+        eprintln!("[debug::renderer]: command upload need");
+        let vertices: Vec<utils::TVertex> = draw_commands
+            .iter()
+            .flat_map(|cmd| cmd.to_vertices(screen_size, dal))
+            .collect();
+        eprintln!("[debug::renderer]: upload of ({}) vertices", vertices.len());
 
-            if vertices.is_empty() {
-                self.vertex_buffer = None;
-                return;
-            }
-
-            let buffer = Buffer::from_iter(
-                self.memory_allocator.clone(),
-                BufferCreateInfo {
-                    usage: BufferUsage::VERTEX_BUFFER,
-                    ..Default::default()
-                },
-                AllocationCreateInfo {
-                    memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
-                        | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
-                    ..Default::default()
-                },
-                vertices,
-            )
-            .expect("[VULKAN::GUI] Failed to create GUI vertex buffer");
-
-            self.vertex_buffer = Some(buffer);
+        if vertices.is_empty() {
+            self.vertex_buffer = None;
+            return;
         }
+
+        let buffer = Buffer::from_iter(
+            self.memory_allocator.clone(),
+            BufferCreateInfo {
+                usage: BufferUsage::VERTEX_BUFFER,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
+                    | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                ..Default::default()
+            },
+            vertices,
+        )
+        .expect("[VULKAN::GUI] Failed to create GUI vertex buffer");
+
+        self.vertex_buffer = Some(buffer);
     }
 
     pub fn render<'a>(

@@ -37,7 +37,7 @@ fn main() -> Result<(), impl std::error::Error> {
             color: Color::risd_blue,
             font_size: 32.0,
             weight: Weight::BOLD,
-            font_family: FamilyOwned::Name("Iosevka Curly Slab".into()),
+            font_family: FamilyOwned::Name("Inter".into()),
             ..Default::default()
         }),
     );

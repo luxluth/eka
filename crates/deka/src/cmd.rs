@@ -22,7 +22,7 @@ pub enum DrawCommand {
 }
 
 impl DrawCommand {
-    pub fn rect_vertices(screen_size: [f32; 2], space: &Space, color: &Color) -> Vec<TVertex> {
+    pub fn rect_vertices(screen_size: [f32; 2], space: &Space, color: &Color) -> [TVertex; 6] {
         let w = space.width.unwrap_or(0) as f32;
         let h = space.height.unwrap_or(0) as f32;
         let x = space.x as f32;
@@ -40,7 +40,7 @@ impl DrawCommand {
         let color_arr: [f32; 4] = (*color).into();
 
         // Create the vertices for the rectangle (two triangles)
-        vec![
+        [
             // Top-left
             TVertex {
                 position: [nx, ny],
@@ -76,7 +76,9 @@ impl DrawCommand {
 
     pub fn to_vertices(&self, screen_size: [f32; 2], dal: &mut DAL) -> Vec<TVertex> {
         match self {
-            DrawCommand::Rect { space, color } => Self::rect_vertices(screen_size, space, color),
+            DrawCommand::Rect { space, color } => {
+                Self::rect_vertices(screen_size, space, color).to_vec()
+            }
             DrawCommand::Text {
                 buffer_ref,
                 space,
@@ -109,7 +111,6 @@ impl DrawCommand {
                     },
                 );
 
-                eprintln!("[debug::font_draw]: ({}) vertices", vertices.len());
                 vertices
             }
         }

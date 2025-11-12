@@ -318,7 +318,9 @@ impl ApplicationHandler for Application {
                     color_blend_state: Some(ColorBlendState::with_attachment_states(
                         subpass.num_color_attachments(),
                         ColorBlendAttachmentState {
-                            blend: Some(vulkano::pipeline::graphics::color_blend::AttachmentBlend::alpha()),
+                            blend: Some(
+                                vulkano::pipeline::graphics::color_blend::AttachmentBlend::alpha(),
+                            ),
                             ..Default::default()
                         },
                     )),
@@ -435,15 +437,10 @@ impl ApplicationHandler for Application {
                     .bind_pipeline_graphics(rcx.pipeline.clone())
                     .unwrap();
 
-                let is_dirty = self.dal.is_dirty();
                 self.dal.compute_layout();
                 let size = [window_size.width as f32, window_size.height as f32];
-                self.gui_renderer.upload_draw_commands(
-                    &self.dal.render(),
-                    size,
-                    is_dirty,
-                    &mut self.dal,
-                );
+                self.gui_renderer
+                    .upload_draw_commands(&self.dal.render(), size, &mut self.dal);
                 self.gui_renderer.render(&mut builder, rcx.pipeline.clone());
 
                 builder.end_render_pass(Default::default()).unwrap();
