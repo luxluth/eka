@@ -317,7 +317,10 @@ impl ApplicationHandler for Application {
                     multisample_state: Some(MultisampleState::default()),
                     color_blend_state: Some(ColorBlendState::with_attachment_states(
                         subpass.num_color_attachments(),
-                        ColorBlendAttachmentState::default(),
+                        ColorBlendAttachmentState {
+                            blend: Some(vulkano::pipeline::graphics::color_blend::AttachmentBlend::alpha()),
+                            ..Default::default()
+                        },
                     )),
                     dynamic_state: [DynamicState::Viewport].into_iter().collect(),
                     subpass: Some(subpass.into()),
