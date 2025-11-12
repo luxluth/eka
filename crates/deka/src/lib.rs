@@ -87,12 +87,15 @@ impl DAL {
         let mut elements: HashMap<heka::CapsuleRef, Box<dyn FrameElement>> = HashMap::new();
         elements.insert(root_frame.get_ref(), Box::new(root_panel));
 
+        let mut ft_sys = FontSystem::new();
+        ft_sys.db_mut().load_system_fonts();
+
         Self {
             root,
             root_frame,
             elements,
             callbacks: HashMap::new(),
-            font_system: FontSystem::new(),
+            font_system: ft_sys,
             swash_cache: SwashCache::new(),
 
             attr,

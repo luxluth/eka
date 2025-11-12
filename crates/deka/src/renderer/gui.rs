@@ -49,6 +49,7 @@ impl GuiRenderer {
                 .iter()
                 .flat_map(|cmd| cmd.to_vertices(screen_size, dal))
                 .collect();
+            eprintln!("[debug::renderer]: upload of ({}) vertices", vertices.len());
 
             if vertices.is_empty() {
                 self.vertex_buffer = None;

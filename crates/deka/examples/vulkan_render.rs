@@ -1,13 +1,18 @@
-use cosmic_text::Weight;
+use cosmic_text::{FamilyOwned, Weight};
 use deka::{DAL, TextStyle, WindowAttr};
-use heka::{Style, color::Color, position::Direction, sizing::Padding};
+use heka::{
+    Style,
+    color::Color,
+    position::Direction,
+    sizing::{Padding, SizeSpec},
+};
 
 fn main() -> Result<(), impl std::error::Error> {
     let mut dal = DAL::new(
         1000,
         700,
         WindowAttr {
-            resizable: true,
+            resizable: false,
             title: "Hello from Deka!".into(),
             ..WindowAttr::default()
         },
@@ -18,7 +23,9 @@ fn main() -> Result<(), impl std::error::Error> {
         Style {
             flow: Direction::Column,
             gap: 2,
-            padding: Padding::new_all(10),
+            padding: Padding::new_all(20),
+            width: SizeSpec::Fill,
+            height: SizeSpec::Fill,
             ..Default::default()
         },
     );
@@ -30,6 +37,7 @@ fn main() -> Result<(), impl std::error::Error> {
             color: Color::risd_blue,
             font_size: 32.0,
             weight: Weight::BOLD,
+            font_family: FamilyOwned::Name("Iosevka Curly Slab".into()),
             ..Default::default()
         }),
     );

@@ -96,7 +96,6 @@ impl DrawCommand {
                         if c.a() == 0 {
                             return;
                         }
-
                         vertices.extend(Self::rect_vertices(
                             screen_size,
                             &Space {
@@ -105,16 +104,12 @@ impl DrawCommand {
                                 width: Some(w),
                                 height: Some(h),
                             },
-                            &Color {
-                                r: c.r(),
-                                g: c.g(),
-                                b: c.b(),
-                                a: c.a(),
-                            },
+                            &Color::new(c.r(), c.g(), c.b(), c.a()),
                         ));
                     },
                 );
 
+                eprintln!("[debug::font_draw]: ({}) vertices", vertices.len());
                 vertices
             }
         }

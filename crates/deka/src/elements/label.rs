@@ -47,6 +47,7 @@ impl Label {
         );
 
         buffer.shape_until_scroll(font_system, true);
+
         let (measured_width, measured_height) = Self::measure_buffer(&buffer);
 
         let buffer_ref = root.set_binding(buffer);
