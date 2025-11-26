@@ -1,6 +1,7 @@
 use super::FrameElement;
 use crate::TextStyle;
 use cosmic_text::{Attrs, Buffer, FontSystem, Shaping};
+use heka::color::Color;
 
 /// Label component
 pub struct Label {
@@ -62,6 +63,7 @@ impl Label {
             style.height = heka::sizing::SizeSpec::Fit;
             style.intrinsic_width = Some(measured_width);
             style.intrinsic_height = Some(measured_height);
+            style.background_color = Color::new(0, 0, 0, 0);
         });
 
         Self {

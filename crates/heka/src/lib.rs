@@ -53,6 +53,20 @@ pub struct CapsuleRef {
     generation: u32,
 }
 
+impl PartialOrd for CapsuleRef {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for CapsuleRef {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.id
+            .cmp(&other.id)
+            .then(self.generation.cmp(&other.generation))
+    }
+}
+
 impl std::fmt::Debug for CapsuleRef {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}@{}", self.id, self.generation)

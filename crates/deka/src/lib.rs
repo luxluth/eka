@@ -3,6 +3,7 @@ use std::collections::HashMap;
 pub use heka;
 use heka::Frame;
 use heka::Style;
+use log::warn;
 pub use text_style::AsCosmicColor;
 pub use text_style::TextStyle;
 
@@ -144,7 +145,7 @@ impl DAL {
             if let Some(label) = frame_element.as_any_mut().downcast_mut::<Label>() {
                 label.set_text(&mut self.root, &mut self.font_system, new_text);
             } else {
-                eprintln!("[warning]: set_label_text called on an Element that is not a Label.");
+                warn!("set_label_text called on an Element that is not a Label.");
             }
         }
     }
@@ -154,7 +155,7 @@ impl DAL {
             if let Some(label) = frame_element.as_any_mut().downcast_mut::<Label>() {
                 label.set_style(&mut self.root, &mut self.font_system, new_style);
             } else {
-                eprintln!("[warning]: set_label_style called on an Element that is not a Label.");
+                warn!("set_label_style called on an Element that is not a Label.");
             }
         }
     }
@@ -195,6 +196,10 @@ impl DAL {
     }
 
     pub fn render(&self) -> Vec<cmd::DrawCommand> {
+        // Tuple: (Z-Index, Priority, CapsuleRef, Command)
+        // Priority: 0 for Rects, 1 for Text. Ensures Text is always ON TOP of Rects for same Z.
+        // CapsuleRef: Used as a stable tie-breaker to prevent HashMap-induced flickering.
+
         let mut commands = Vec::new();
 
         for (capsule_ref, element) in &self.elements {
@@ -206,9 +211,12 @@ impl DAL {
                 if style.background_color.a > 0 {
                     commands.push((
                         style.z_index,
+                        0,
+                        *capsule_ref,
                         cmd::DrawCommand::Rect {
                             space,
                             color: style.background_color,
+                            z_index: style.z_index,
                         },
                     ));
                 }
@@ -217,10 +225,13 @@ impl DAL {
                     if let Some(data_ref) = element.data_ref() {
                         commands.push((
                             style.z_index,
+                            1,
+                            *capsule_ref,
                             cmd::DrawCommand::Text {
                                 space,
                                 buffer_ref: data_ref,
                                 style: label.text_style.clone(),
+                                z_index: style.z_index,
                             },
                         ));
                     }
@@ -228,12 +239,17 @@ impl DAL {
             }
         }
 
-        commands.sort_by_key(|(z_index, _)| *z_index);
-        commands.into_iter().map(|(_, cmd)| cmd).collect()
+        // Z-Index (Logic)
+        // Priority (Text > Rect)
+        // CapsuleRef (Stability)
+        commands.sort_by(|a, b| a.0.cmp(&b.0).then(a.1.cmp(&b.1)).then(a.2.cmp(&b.2)));
+        commands.into_iter().map(|(_, _, _, cmd)| cmd).collect()
     }
 
     pub fn run(self) -> Result<(), impl std::error::Error> {
         use winit::event_loop::EventLoop;
+        let _ = env_logger::try_init();
+
         let event_loop = EventLoop::new().unwrap();
         let mut application = app::Application::new(&event_loop, self);
 

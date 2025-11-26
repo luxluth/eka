@@ -56,7 +56,5 @@ fn main() {
     let elapsed_fast = now_fast.elapsed();
     eprintln!("'Do nothing' compute took {elapsed_fast:?}");
 
-    root.debug_layout_tree();
-
-    println!("commands: {:?}", root.commands());
+    // root.debug_layout_tree();
 }
