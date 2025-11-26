@@ -409,6 +409,7 @@ dependencies = [
  "cosmic-text",
  "env_logger",
  "heka",
+ "log",
  "vulkano",
  "vulkano-shaders",
  "vulkano-util",
