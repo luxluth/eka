@@ -6,6 +6,8 @@ use heka::Style;
 use log::warn;
 pub use text_style::AsCosmicColor;
 pub use text_style::TextStyle;
+use winit::dpi::PhysicalPosition;
+use winit::event::MouseButton;
 
 use crate::elements::{Button, FrameElement, Label, Panel};
 
@@ -26,18 +28,22 @@ pub struct DAL {
     elements: HashMap<heka::CapsuleRef, Box<dyn FrameElement>>,
     callbacks: HashMap<heka::CapsuleRef, Box<dyn FnMut(&mut DAL, &ClickEvent)>>,
 
-    attr: WindowAttr,
+    pub(crate) attr: WindowAttr,
 
-    pub font_system: FontSystem,
-    pub swash_cache: SwashCache,
+    pub(crate) font_system: FontSystem,
+    pub(crate) swash_cache: SwashCache,
+
+    pub(crate) mouse_pos: PhysicalPosition<f64>,
+    pub(crate) mouse_pressed: bool,
 }
 
 pub mod events {
+    use winit::{dpi::PhysicalPosition, event::MouseButton};
+
     #[derive(Debug, Clone, Copy)]
     pub struct ClickEvent {
-        pub x: i32,
-        pub y: i32,
-        // pub button: MouseButton
+        pub pos: PhysicalPosition<f64>,
+        pub button: MouseButton,
     }
 }
 
@@ -145,6 +151,8 @@ impl DAL {
             swash_cache: SwashCache::new(),
 
             attr,
+            mouse_pos: PhysicalPosition::default(),
+            mouse_pressed: false,
         }
     }
 
@@ -347,16 +355,47 @@ impl DAL {
         self.root.resize(new_width, new_height);
     }
 
-    pub fn on_click(&mut self, x: i32, y: i32) {
-        let Some(hitted) = self.root.hit_test(x, y) else {
+    pub(crate) fn click(&mut self, mouse_button: MouseButton, pressed: bool) {
+        if pressed {
+            self.mouse_pressed = true;
             return;
-        };
-        let Some(mut callback) = self.callbacks.remove(&hitted) else {
-            return;
-        };
-        let event = ClickEvent { x, y };
-        callback(self, &event);
-        self.callbacks.insert(hitted, callback);
+        }
+
+        if self.mouse_pressed && !pressed {
+            self.mouse_pressed = false;
+            let hits = self.root.hit_test(
+                self.mouse_pos.x.ceil() as i32,
+                self.mouse_pos.y.ceil() as i32,
+            );
+
+            if hits.is_empty() {
+                return;
+            }
+
+            let mut hit_candidates: Vec<(heka::CapsuleRef, u32)> = hits
+                .into_iter()
+                .filter_map(|cref| {
+                    let style = self.root.get_style(cref)?;
+                    Some((cref, style.z_index))
+                })
+                .collect();
+
+            hit_candidates.sort_by(|a, b| b.1.cmp(&a.1).then(b.0.cmp(&a.0)));
+
+            let event = ClickEvent {
+                pos: self.mouse_pos,
+                button: mouse_button,
+            };
+
+            for (cref, _) in hit_candidates {
+                if let Some(mut callback) = self.callbacks.remove(&cref) {
+                    callback(self, &event);
+                    self.callbacks.insert(cref, callback);
+
+                    return;
+                }
+            }
+        }
     }
 
     pub fn get_buffer<T: 'static>(&self, buffer_ref: usize) -> Option<&T> {

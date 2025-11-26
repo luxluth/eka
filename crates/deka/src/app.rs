@@ -417,6 +417,20 @@ impl ApplicationHandler for Application {
             WindowEvent::CloseRequested => {
                 event_loop.exit();
             }
+            WindowEvent::CursorMoved {
+                device_id: _,
+                position,
+            } => {
+                self.dal.mouse_pos = position;
+            }
+            WindowEvent::MouseInput {
+                device_id: _,
+                state,
+                button,
+            } => {
+                self.dal.click(button, state.is_pressed());
+            }
+
             WindowEvent::Resized(PhysicalSize { width, height }) => {
                 rcx.recreate_swapchain = true;
                 self.dal.resize(width, height);
