@@ -107,46 +107,52 @@ impl SizeSpec {
 //         return Self::Auto;
 //     }
 // }
-
-#[derive(Debug, Default, Clone, Copy)]
-pub struct Padding {
-    pub left: u32,
-    pub right: u32,
-    pub top: u32,
-    pub bottom: u32,
-}
-
-impl Padding {
-    pub fn new(left: u32, right: u32, top: u32, bottom: u32) -> Self {
-        Self {
-            left,
-            right,
-            top,
-            bottom,
+macro_rules! dimensioner {
+    ($for:ident, $display: literal) => {
+        #[derive(Debug, Default, Clone, Copy)]
+        pub struct $for {
+            pub left: u32,
+            pub right: u32,
+            pub top: u32,
+            pub bottom: u32,
         }
-    }
 
-    pub fn new_all(all: u32) -> Self {
-        Self::new(all, all, all, all)
-    }
+        impl $for {
+            pub fn new(left: u32, right: u32, top: u32, bottom: u32) -> Self {
+                Self {
+                    left,
+                    right,
+                    top,
+                    bottom,
+                }
+            }
 
-    pub fn new_lr_tb(lr: u32, tb: u32) -> Self {
-        Self::new(lr, lr, tb, tb)
-    }
+            pub fn new_all(all: u32) -> Self {
+                Self::new(all, all, all, all)
+            }
+
+            pub fn new_lr_tb(lr: u32, tb: u32) -> Self {
+                Self::new(lr, lr, tb, tb)
+            }
+        }
+
+        impl std::fmt::Display for $for {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                write!(
+                    f,
+                    "{}(L{}, R{}, T{}, B{})",
+                    $display, self.left, self.right, self.top, self.bottom
+                )
+            }
+        }
+
+        impl $for {
+            pub fn is_zero(&self) -> bool {
+                self.left == 0 && self.right == 0 && self.top == 0 && self.bottom == 0
+            }
+        }
+    };
 }
 
-impl std::fmt::Display for Padding {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "Pad(L{}, R{}, T{}, B{})",
-            self.left, self.right, self.top, self.bottom
-        )
-    }
-}
-
-impl Padding {
-    pub fn is_zero(&self) -> bool {
-        self.left == 0 && self.right == 0 && self.top == 0 && self.bottom == 0
-    }
-}
+dimensioner!(Padding, "Pad");
+dimensioner!(Margin, "Mar");

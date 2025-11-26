@@ -6,7 +6,7 @@ use crate::{
     boxalloc::Allocator,
     color::Color,
     position::{Direction, LayoutStrategy, Position},
-    sizing::{Padding, SizeSpec},
+    sizing::{Margin, Padding, SizeSpec},
 };
 
 mod boxalloc;
@@ -152,6 +152,9 @@ pub struct Style {
     /// Padding setted for a Frame element
     pub padding: Padding,
 
+    /// Margin setted for a Frame element
+    pub margin: Margin,
+
     /// Defines how much a flex item will grow.
     /// Default is 0.0 (don't grow).
     pub flex_grow: f32,
@@ -191,6 +194,7 @@ impl Default for Style {
             width: SizeSpec::default(),
             height: SizeSpec::default(),
             padding: Padding::default(),
+            margin: Margin::default(),
             layout: LayoutStrategy::default(),
             flow: Direction::default(),
             position: Position::default(),
@@ -565,7 +569,7 @@ impl Root {
             None => return, // This space was removed, skip.
         };
 
-        // --- 1. Determine My Final Size ---
+        // 1 - Determine My Final Size
         // Get my "desired" size from Pass 1
         let desired_w = space.width.unwrap();
         let desired_h = space.height.unwrap();
@@ -575,7 +579,7 @@ impl Root {
         let final_w = style.width.resolve_size(given_width).unwrap_or(desired_w);
         let final_h = style.height.resolve_size(given_height).unwrap_or(desired_h);
 
-        // --- 2. Determine My Final Position ---
+        // 2 - Determine My Final Position
         // This is determined by *my* `Position` style.
         // The `given_x/y` are from my parent's layout flow.
         let (final_x, final_y) = match style.position {
@@ -587,19 +591,19 @@ impl Root {
             }
         };
 
-        // --- 3. Store My Final Space ---
+        // 3 - Store My Final Space
         space.x = final_x;
         space.y = final_y;
         space.width = Some(final_w);
         space.height = Some(final_h);
 
-        // --- 4. Calculate My "Content Box" for My Children ---
+        // 4 - Calculate My "Content Box" for My Children
         let content_x = final_x + style.padding.left as i32;
         let content_y = final_y + style.padding.top as i32;
         let content_w = final_w.saturating_sub(style.padding.left + style.padding.right);
         let content_h = final_h.saturating_sub(style.padding.top + style.padding.bottom);
 
-        // --- 5. Pre-pass: Analyze In-Flow Children for Flex 'Fill' ---
+        // 5 - Pre-pass: Analyze In-Flow Children for Flex 'Fill'
         // We need to know how many `Fill` children we have to divide space.
         let mut in_flow_children = Vec::new();
         let mut total_base_w = 0.0;
@@ -649,7 +653,7 @@ impl Root {
             }
         }
 
-        // --- 6. Calculate Space for 'Fill' Children ---
+        // 7 - Calculate Space for 'Fill' Children
         let total_gap_w = if style.flow == Direction::Row && !in_flow_children.is_empty() {
             style.gap * (in_flow_children.len() as u32 - 1)
         } else {
@@ -696,7 +700,7 @@ impl Root {
             }
         }
 
-        // --- 7. Recurse and Arrange All Children ---
+        // 7 - Recurse and Arrange All Children
         let mut current_x = content_x;
         let mut current_y = content_y;
         let children_to_layout = capsule.children.clone();
@@ -732,11 +736,16 @@ impl Root {
                     let base_w = child_desired_w as f32;
                     let base_h = child_desired_h as f32;
 
+                    let m_left = child_style.margin.left as i32;
+                    let m_right = child_style.margin.right as i32;
+                    let m_top = child_style.margin.top as i32;
+                    let m_bottom = child_style.margin.bottom as i32;
+
                     match style.layout {
                         LayoutStrategy::Flex => match style.flow {
                             Direction::Row => {
-                                child_given_x = current_x;
-                                child_given_y = current_y;
+                                child_given_x = current_x + m_left;
+                                child_given_y = current_y + m_top; // Align top with margin
 
                                 let final_child_w = if remaining_w > 0.0 {
                                     base_w + (child_style.flex_grow * grow_per_factor_w) // Grow
@@ -751,12 +760,12 @@ impl Root {
                                     SizeSpec::Percent(_) => content_w,
                                     _ => final_child_w as u32,
                                 };
-                                child_given_h = content_h; // Flex row items fill height
+                                child_given_h = content_h.saturating_sub((m_top + m_bottom) as u32); // Flex row items fill height minus margin
                             }
                             Direction::Column => {
-                                child_given_x = current_x;
-                                child_given_y = current_y;
-                                child_given_w = content_w; // Flex col items fill width
+                                child_given_x = current_x + m_left; // Align left with margin
+                                child_given_y = current_y + m_top;
+                                child_given_w = content_w.saturating_sub((m_left + m_right) as u32); // Flex col items fill width minus margin
 
                                 let final_child_h = if remaining_h > 0.0 {
                                     base_h + (child_style.flex_grow * grow_per_factor_h) // Grow
@@ -861,7 +870,7 @@ impl Root {
             None => return (0, 0), // Dead handle or missing style, skip.
         };
 
-        // --- 1. Recurse and Measure "In-Flow" Children ---
+        // 1 - Recurse and Measure "In-Flow" Children
         // Children with `Position::Fixed` are "out-of-flow" and do not
         // contribute to their parent's `FitContent` size.
         let mut in_flow_child_sizes = Vec::new();
@@ -879,11 +888,11 @@ impl Root {
 
             // Only "Auto" children participate in the parent's `Fit` sizing
             if child_style.position == Position::Auto {
-                in_flow_child_sizes.push((child_w, child_h));
+                in_flow_child_sizes.push((child_w, child_h, child_style.margin));
             }
         }
 
-        // --- 2. Calculate This Node's "Content" Size ---
+        // 2 - Calculate This Node's "Content" Size
         let (mut content_w, mut content_h);
 
         if !capsule.children.is_empty() {
@@ -893,14 +902,17 @@ impl Root {
                     match style.flow {
                         Direction::Row => {
                             // Width is sum of child widths + gaps
-                            content_w = in_flow_child_sizes.iter().map(|(w, _)| *w).sum();
+                            content_w = in_flow_child_sizes
+                                .iter()
+                                .map(|(w, _, m)| *w + m.left + m.right)
+                                .sum();
                             if !in_flow_child_sizes.is_empty() {
                                 content_w += style.gap * (in_flow_child_sizes.len() as u32 - 1);
                             }
                             // Height is max of child heights
                             content_h = in_flow_child_sizes
                                 .iter()
-                                .map(|(_, h)| *h)
+                                .map(|(_, h, m)| *h + m.top + m.bottom)
                                 .max()
                                 .unwrap_or(0);
                         }
@@ -908,11 +920,14 @@ impl Root {
                             // Width is max of child widths
                             content_w = in_flow_child_sizes
                                 .iter()
-                                .map(|(w, _)| *w)
+                                .map(|(w, _, m)| *w + m.left + m.right)
                                 .max()
                                 .unwrap_or(0);
                             // Height is sum of child heights + gaps
-                            content_h = in_flow_child_sizes.iter().map(|(_, h)| *h).sum();
+                            content_h = in_flow_child_sizes
+                                .iter()
+                                .map(|(_, h, m)| *h + m.top + m.bottom)
+                                .sum();
                             if !in_flow_child_sizes.is_empty() {
                                 content_h += style.gap * (in_flow_child_sizes.len() as u32 - 1);
                             }
@@ -923,12 +938,12 @@ impl Root {
                     // Default: size is the max of any child
                     content_w = in_flow_child_sizes
                         .iter()
-                        .map(|(w, _)| *w)
+                        .map(|(w, _, m)| *w + m.left + m.right)
                         .max()
                         .unwrap_or(0);
                     content_h = in_flow_child_sizes
                         .iter()
-                        .map(|(_, h)| *h)
+                        .map(|(_, h, m)| *h + m.top + m.bottom)
                         .max()
                         .unwrap_or(0);
                 }
@@ -938,7 +953,7 @@ impl Root {
             content_h = style.intrinsic_height.unwrap_or(0);
         }
 
-        // --- 3. Determine Final Desired Size Based on Style ---
+        // 3 - Determine Final Desired Size Based on Style
         // `Fill` and `Percent` have 0 desired size in Pass 1. They expand in Pass 2.
         let desired_w = match style.width {
             SizeSpec::Pixel(w) => w,
@@ -952,7 +967,7 @@ impl Root {
             SizeSpec::Fill | SizeSpec::Percent(_) => 0,
         };
 
-        // --- 4. Store Result in Space ---
+        // 4 - Store Result in Space
         if let Some(space) = self.spaces[capsule.space_ref].as_mut() {
             space.width = Some(desired_w);
             space.height = Some(desired_h);
@@ -969,7 +984,7 @@ impl Root {
         use ansi_term::Style;
         let s = Style::new().fg(ansi_term::Color::Yellow).bold();
 
-        // 1. Safely get root space dimensions
+        // 1 - Safely get root space dimensions
         let (w, h) = self
             .spaces
             .get(0)
@@ -979,7 +994,7 @@ impl Root {
 
         eprintln!("{}", s.paint(format!("R ┬ {}x{}", w, h)));
 
-        // 2. Find all *valid* top-level nodes
+        // 2 - Find all *valid* top-level nodes
         let mut top_level_nodes = Vec::new();
         for (i, slot) in self.capsules.iter().enumerate() {
             if let Some(cap) = &slot.capsule {
@@ -992,7 +1007,7 @@ impl Root {
             }
         }
 
-        // 3. Print the tree for each top-level node
+        // 3 - Print the tree for each top-level node
         let count = top_level_nodes.len();
         for (i, cref) in top_level_nodes.iter().enumerate() {
             let is_last = i == count - 1;
@@ -1007,7 +1022,7 @@ impl Root {
     fn debug_print_node(&self, cref: CapsuleRef, indent: &str, is_last: bool) {
         use ansi_term::Style;
 
-        // --- 1. Setup Styles & Strings ---
+        // 1 - Setup Styles & Strings
         let num_s = Style::new().dimmed().bold();
         let dim = Style::new().dimmed();
         let field = Style::new().fg(ansi_term::Color::Purple);
@@ -1024,7 +1039,7 @@ impl Root {
         let branch_str = dim.paint(format!("{indent}{branch_char}─ "));
         let continue_str = format!("{indent}{continue_char}  "); // This is the indent for children
 
-        // --- 2. Safely Get All Data ---
+        // 2 - Safely Get All Data
         let (capsule, space, style) = {
             // Use our safe getter
             let Some(slot) = self.capsules.get(cref.id) else {
@@ -1058,7 +1073,7 @@ impl Root {
             (cap.clone(), sp, st) // Clone capsule to release `self` borrow
         };
 
-        // --- 3. Print This Node's Info ---
+        // 3 - Print This Node's Info
         eprintln!("{branch_str}Capsule({})", num_s.paint(cref_str));
 
         let info_indent = dim.paint(format!("{continue_str}"));
@@ -1099,7 +1114,7 @@ impl Root {
             eprintln!("{info_indent}{}", error_s.paint("Style: [None]"));
         }
 
-        // --- 4. Recurse for Children ---
+        // 4 - Recurse for Children
         let children_count = capsule.children.len();
         for (i, child_cref) in capsule.children.iter().enumerate() {
             let is_last_child = i == children_count - 1;
