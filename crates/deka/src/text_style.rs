@@ -2,12 +2,27 @@ use heka::color;
 
 use cosmic_text::{Align, Attrs, FamilyOwned, Metrics, Style as FontStyle, Weight};
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum TextHeight {
+    Auto,
+    Fixed(f32),
+}
+
+impl TextHeight {
+    pub fn measure(&self, font_size: f32) -> f32 {
+        match self {
+            TextHeight::Auto => font_size * 1.2,
+            TextHeight::Fixed(x) => *x,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct TextStyle {
     pub font_family: FamilyOwned,
     pub color: color::Color,
     pub font_size: f32,
-    pub line_height_px: f32,
+    pub line_height: TextHeight,
     pub weight: Weight,
     pub style: FontStyle,
     pub align: Align,
@@ -19,7 +34,7 @@ impl Default for TextStyle {
             font_family: FamilyOwned::SansSerif,
             color: color::Color::black,
             font_size: 14.0,
-            line_height_px: 18.0,
+            line_height: TextHeight::Auto,
             weight: Weight::NORMAL,
             style: FontStyle::Normal,
             align: Align::Left,
@@ -48,6 +63,6 @@ impl TextStyle {
     }
 
     pub fn as_cosmic_metrics(&self) -> Metrics {
-        Metrics::new(self.font_size, self.line_height_px)
+        Metrics::new(self.font_size, self.line_height.measure(self.font_size))
     }
 }

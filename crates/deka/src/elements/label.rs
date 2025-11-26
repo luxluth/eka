@@ -67,6 +67,7 @@ impl Label {
             style.intrinsic_width = Some(measured_width);
             style.intrinsic_height = Some(measured_height);
             style.background_color = Color::new(0, 0, 0, 0);
+            // style.background_color = Color::new(70, 230, 230, 200);
         });
 
         Self {
@@ -111,37 +112,25 @@ impl Label {
     }
 
     fn measure_buffer(buffer: &Buffer) -> (u32, u32) {
-        // let measured_width = buffer
-        //     .layout_runs()
-        //     .map(|run| run.line_w)
-        //     .max_by(|a, b| a.partial_cmp(b).unwrap())
-        //     .unwrap_or(0.0)
-        //     .ceil() as u32;
-        //
-        // let metrics_line_height = buffer.metrics().line_height;
-        // let measured_height = if let Some(last_run) = buffer.layout_runs().last() {
-        //     (last_run.line_y + metrics_line_height).ceil() as u32
-        // } else {
-        //     0
-        // };
-        //
-        // (measured_width, measured_height)
+        let measured_width = buffer
+            .layout_runs()
+            .map(|run| run.line_w)
+            .max_by(|a, b| a.partial_cmp(b).unwrap())
+            .unwrap_or(0.0)
+            .ceil() as u32;
+        let metrics = buffer.metrics();
 
-        let mut width = 0.0f32;
-        let mut height = 0.0f32;
+        let metrics_line_height = buffer.metrics().line_height;
+        let measured_height = if let Some(last_run) = buffer.layout_runs().last() {
+            (last_run.line_y + metrics_line_height).ceil() as u32
+        } else {
+            0
+        };
 
-        // Calculate the bounding box of the text
-        for run in buffer.layout_runs() {
-            width = width.max(run.line_w);
-            // The bottom of this line is its Y position + its height
-            height = run.line_y + run.line_height;
-        }
-
-        // We add +1 to the width to account for anti-aliasing spill
-        // or slight glyph overhangs that aren't captured in `line_w`.
-        // Without this, the last pixel of the last letter often draws
-        // outside the background rect.
-        (width.ceil() as u32 + 1, height.ceil() as u32)
+        (
+            measured_width,
+            (measured_height as f32 - metrics.line_height).ceil() as u32,
+        )
     }
 
     pub(crate) fn remeasure_and_push(

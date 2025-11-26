@@ -1,4 +1,4 @@
-use cosmic_text::{FamilyOwned, Weight};
+use cosmic_text::FamilyOwned;
 use deka::{DAL, TextStyle, WindowAttr};
 use heka::{
     Style,
@@ -36,7 +36,6 @@ fn main() -> Result<(), impl std::error::Error> {
         Some(TextStyle {
             color: Color::risd_blue,
             font_size: 32.0,
-            weight: Weight::BOLD,
             font_family: FamilyOwned::Name("Fantasque Sans Mono".into()),
             ..Default::default()
         }),
@@ -48,7 +47,6 @@ fn main() -> Result<(), impl std::error::Error> {
         Some(TextStyle {
             color: Color::risd_blue,
             font_size: 32.0,
-            weight: Weight::BOLD,
             font_family: FamilyOwned::Name("Fantasque Sans Mono".into()),
             ..Default::default()
         }),
@@ -60,7 +58,6 @@ fn main() -> Result<(), impl std::error::Error> {
         Some(TextStyle {
             color: Color::risd_blue,
             font_size: 32.0,
-            weight: Weight::BOLD,
             font_family: FamilyOwned::Name("Fantasque Sans Mono".into()),
             ..Default::default()
         }),
@@ -71,7 +68,6 @@ fn main() -> Result<(), impl std::error::Error> {
         Some(TextStyle {
             color: Color::risd_blue,
             font_size: 32.0,
-            weight: Weight::BOLD,
             font_family: FamilyOwned::Name("Fantasque Sans Mono".into()),
             ..Default::default()
         }),
@@ -82,7 +78,6 @@ fn main() -> Result<(), impl std::error::Error> {
         Some(TextStyle {
             color: Color::risd_blue,
             font_size: 32.0,
-            weight: Weight::BOLD,
             font_family: FamilyOwned::Name("Fantasque Sans Mono".into()),
             ..Default::default()
         }),
@@ -93,7 +88,6 @@ fn main() -> Result<(), impl std::error::Error> {
         Some(TextStyle {
             color: Color::risd_blue,
             font_size: 32.0,
-            weight: Weight::BOLD,
             font_family: FamilyOwned::Name("Fantasque Sans Mono".into()),
             ..Default::default()
         }),
@@ -104,7 +98,6 @@ fn main() -> Result<(), impl std::error::Error> {
         Some(TextStyle {
             color: Color::risd_blue,
             font_size: 32.0,
-            weight: Weight::BOLD,
             font_family: FamilyOwned::Name("Fantasque Sans Mono".into()),
             ..Default::default()
         }),
@@ -115,7 +108,6 @@ fn main() -> Result<(), impl std::error::Error> {
         Some(TextStyle {
             color: Color::risd_blue,
             font_size: 32.0,
-            weight: Weight::BOLD,
             font_family: FamilyOwned::Name("Fantasque Sans Mono".into()),
             ..Default::default()
         }),
@@ -126,7 +118,6 @@ fn main() -> Result<(), impl std::error::Error> {
         Some(TextStyle {
             color: Color::risd_blue,
             font_size: 32.0,
-            weight: Weight::BOLD,
             font_family: FamilyOwned::Name("Fantasque Sans Mono".into()),
             ..Default::default()
         }),
@@ -137,7 +128,6 @@ fn main() -> Result<(), impl std::error::Error> {
         Some(TextStyle {
             color: Color::risd_blue,
             font_size: 32.0,
-            weight: Weight::BOLD,
             font_family: FamilyOwned::Name("Fantasque Sans Mono".into()),
             ..Default::default()
         }),
@@ -148,7 +138,6 @@ fn main() -> Result<(), impl std::error::Error> {
         Some(TextStyle {
             color: Color::risd_blue,
             font_size: 32.0,
-            weight: Weight::BOLD,
             font_family: FamilyOwned::Name("Fantasque Sans Mono".into()),
             ..Default::default()
         }),
@@ -159,7 +148,6 @@ fn main() -> Result<(), impl std::error::Error> {
         Some(TextStyle {
             color: Color::risd_blue,
             font_size: 32.0,
-            weight: Weight::BOLD,
             font_family: FamilyOwned::Name("Fantasque Sans Mono".into()),
             ..Default::default()
         }),
@@ -173,7 +161,6 @@ fn main() -> Result<(), impl std::error::Error> {
         },
         Some(TextStyle {
             font_size: 14.0,
-            weight: Weight::BOLD,
             font_family: FamilyOwned::Name("Fantasque Sans Mono".into()),
             ..Default::default()
         }),
