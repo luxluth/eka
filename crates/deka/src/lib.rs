@@ -250,6 +250,7 @@ impl DAL {
             width: size!(fit),
             height: size!(fit),
             padding: heka::sizing::Padding::new_lr_tb(4, 2),
+            margin: heka::sizing::Margin::new_lr_tb(0, 4),
             background_color: heka::color::Color::new(200, 200, 200, 255),
             layout: layout!(flex),
         });
