@@ -41,17 +41,62 @@ pub mod events {
     }
 }
 
+pub trait ElementRef: Copy + Into<Element> {
+    fn raw(&self) -> heka::CapsuleRef;
+}
+
 /// Represent UI element
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Element(pub(crate) heka::CapsuleRef);
 
-impl Element {
-    pub fn raw(&self) -> heka::CapsuleRef {
+impl ElementRef for Element {
+    fn raw(&self) -> heka::CapsuleRef {
         self.0
     }
+}
 
+impl Element {
     pub fn frame(&self) -> heka::Frame {
         Frame::define(self.0)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct LabelRef(pub(crate) heka::CapsuleRef);
+impl From<LabelRef> for Element {
+    fn from(v: LabelRef) -> Self {
+        Element(v.0)
+    }
+}
+impl ElementRef for LabelRef {
+    fn raw(&self) -> heka::CapsuleRef {
+        self.0
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct PanelRef(pub(crate) heka::CapsuleRef);
+impl From<PanelRef> for Element {
+    fn from(v: PanelRef) -> Self {
+        Element(v.0)
+    }
+}
+impl ElementRef for PanelRef {
+    fn raw(&self) -> heka::CapsuleRef {
+        self.0
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct ButtonRef(pub(crate) heka::CapsuleRef);
+impl From<ButtonRef> for Element {
+    fn from(v: ButtonRef) -> Self {
+        Element(v.0)
+    }
+}
+impl ElementRef for ButtonRef {
+    fn raw(&self) -> heka::CapsuleRef {
+        self.0
     }
 }
 
@@ -106,12 +151,18 @@ impl DAL {
     pub fn new_label<S: ToString>(
         &mut self,
         text: S,
-        parent_frame: Option<&heka::Frame>,
+        parent_frame: Option<impl ElementRef>,
         text_style: Option<TextStyle>,
-    ) -> Element {
+    ) -> LabelRef {
+        let parent_frame = if let Some(pf) = parent_frame {
+            &Frame::define(pf.raw())
+        } else {
+            &self.root_frame
+        };
+
         let label = Label::new(
             &mut self.root,
-            Some(parent_frame.unwrap_or(&self.root_frame)),
+            Some(parent_frame),
             text.to_string(),
             text_style.unwrap_or(TextStyle::default()),
             &mut self.font_system,
@@ -120,10 +171,10 @@ impl DAL {
         let label_ref = label.frame.get_ref();
 
         self.elements.insert(label_ref, Box::new(label));
-        Element(label_ref)
+        LabelRef(label_ref)
     }
 
-    pub fn new_panel(&mut self, parent_frame: Option<&heka::Frame>, style: Style) -> Element {
+    pub fn new_panel(&mut self, parent_frame: Option<&heka::Frame>, style: Style) -> PanelRef {
         let new_frame = if let Some(parent) = parent_frame {
             self.root.add_frame_child(parent, None)
         } else {
@@ -137,26 +188,41 @@ impl DAL {
         });
 
         self.elements.insert(panel.frame.get_ref(), Box::new(panel));
-        Element(new_frame.get_ref())
+        PanelRef(new_frame.get_ref())
     }
 
-    pub fn set_label_text(&mut self, element: Element, new_text: String) {
-        if let Some(frame_element) = self.elements.get_mut(&element.0) {
-            if let Some(label) = frame_element.as_any_mut().downcast_mut::<Label>() {
-                label.set_text(&mut self.root, &mut self.font_system, new_text);
-            } else {
-                warn!("set_label_text called on an Element that is not a Label.");
-            }
-        }
+    pub fn set_label_text(&mut self, element: LabelRef, new_text: String) {
+        self.with_component_mut::<Label>(element.0, |label, dal| {
+            label.set_text(&mut dal.root, &mut dal.font_system, new_text);
+        });
     }
 
-    pub fn set_label_style(&mut self, element: Element, new_style: TextStyle) {
-        if let Some(frame_element) = self.elements.get_mut(&element.0) {
-            if let Some(label) = frame_element.as_any_mut().downcast_mut::<Label>() {
-                label.set_style(&mut self.root, &mut self.font_system, new_style);
+    pub fn set_label_style(&mut self, element: LabelRef, new_style: TextStyle) {
+        self.with_component_mut::<Label>(element.0, |label, dal| {
+            label.set_style(&mut dal.root, &mut dal.font_system, new_style);
+        });
+    }
+
+    /// Helper to safely downcast and modify a component.
+    /// Reduces boilerplate in set_* methods.
+    fn with_component_mut<T: FrameElement + 'static>(
+        &mut self,
+        capsule_ref: heka::CapsuleRef,
+        op: impl FnOnce(&mut T, &mut DAL),
+    ) {
+        if let Some(mut frame_element) = self.elements.remove(&capsule_ref) {
+            if let Some(component) = frame_element.as_any_mut().downcast_mut::<T>() {
+                op(component, self);
             } else {
-                warn!("set_label_style called on an Element that is not a Label.");
+                warn!(
+                    "Element type mismatch: Expected {}",
+                    std::any::type_name::<T>()
+                );
             }
+            // Put the element back into the map
+            self.elements.insert(capsule_ref, frame_element);
+        } else {
+            warn!("Element not found or invalid reference: {:?}", capsule_ref);
         }
     }
 
@@ -164,35 +230,46 @@ impl DAL {
     pub fn new_button<S: ToString, F>(
         &mut self,
         text: S,
-        parent_frame: Option<&heka::Frame>,
+        parent_frame: Option<impl ElementRef>,
         on_click: F,
-    ) -> Element
+        label_style: Option<TextStyle>,
+    ) -> ButtonRef
     where
         F: FnMut(&mut DAL, &ClickEvent) + 'static,
     {
-        let parent = parent_frame.unwrap_or(&self.root_frame);
+        let parent = if let Some(pf) = parent_frame {
+            &Frame::define(pf.raw())
+        } else {
+            &self.root_frame
+        };
+
         let button_frame = self.root.add_frame_child(parent, None);
         let button_ref = button_frame.get_ref();
 
         style!(button_frame, &mut self.root, {
             width: size!(fit),
             height: size!(fit),
-            padding: heka::sizing::Padding::new_all(8),
+            padding: heka::sizing::Padding::new_lr_tb(2, 1),
             background_color: heka::color::Color::new(200, 200, 200, 255),
+            layout: layout!(flex),
         });
 
-        let label_style = TextStyle::default();
-        let label_element = self.new_label(text, Some(&button_frame), Some(label_style));
+        let label_style = label_style.unwrap_or(TextStyle::default());
+        let label_element = self.new_label(
+            text,
+            Some(Element(button_frame.get_ref())),
+            Some(label_style),
+        );
 
         let button_component = Button {
             frame: button_frame,
-            child_label: label_element,
+            child_label: label_element.into(),
         };
 
         self.callbacks.insert(button_ref, Box::new(on_click));
         self.elements.insert(button_ref, Box::new(button_component));
 
-        Element(button_ref)
+        ButtonRef(button_ref)
     }
 
     pub fn render(&self) -> Vec<cmd::DrawCommand> {
@@ -200,7 +277,7 @@ impl DAL {
         // Priority: 0 for Rects, 1 for Text. Ensures Text is always ON TOP of Rects for same Z.
         // CapsuleRef: Used as a stable tie-breaker to prevent HashMap-induced flickering.
 
-        let mut commands = Vec::new();
+        let mut commands = Vec::with_capacity(self.elements.len());
 
         for (capsule_ref, element) in &self.elements {
             // Get the computed layout and style
@@ -239,9 +316,7 @@ impl DAL {
             }
         }
 
-        // Z-Index (Logic)
-        // Priority (Text > Rect)
-        // CapsuleRef (Stability)
+        // Z-Index (Logic) -> Priority (Text > Rect) -> CapsuleRef (Stability)
         commands.sort_by(|a, b| a.0.cmp(&b.0).then(a.1.cmp(&b.1)).then(a.2.cmp(&b.2)));
         commands.into_iter().map(|(_, _, _, cmd)| cmd).collect()
     }

@@ -15,3 +15,9 @@ impl FrameElement for Button {
     fn as_any(&self) -> &dyn std::any::Any { self }
     fn as_any_mut(&mut self) -> &mut dyn std::any::Any  { self }
 }
+
+impl Button {
+    pub fn child(&self) -> Element {
+        return self.child_label;
+    }
+}

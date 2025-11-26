@@ -31,23 +31,152 @@ fn main() -> Result<(), impl std::error::Error> {
     );
 
     let label = dal.new_label(
-        "Hello, Eka!",
-        Some(&panel.frame()),
+        "The Quick Brown Fox Jumps Over The Lazy Dog",
+        Some(panel),
         Some(TextStyle {
             color: Color::risd_blue,
             font_size: 32.0,
             weight: Weight::BOLD,
-            font_family: FamilyOwned::Name("Inter".into()),
+            font_family: FamilyOwned::Name("Fantasque Sans Mono".into()),
+            ..Default::default()
+        }),
+    );
+
+    dal.new_label(
+        "The Quick Brown Fox Jumps Over The Lazy Dog",
+        Some(panel),
+        Some(TextStyle {
+            color: Color::risd_blue,
+            font_size: 32.0,
+            weight: Weight::BOLD,
+            font_family: FamilyOwned::Name("Fantasque Sans Mono".into()),
+            ..Default::default()
+        }),
+    );
+
+    dal.new_label(
+        "The Quick Brown Fox Jumps Over The Lazy Dog",
+        Some(panel),
+        Some(TextStyle {
+            color: Color::risd_blue,
+            font_size: 32.0,
+            weight: Weight::BOLD,
+            font_family: FamilyOwned::Name("Fantasque Sans Mono".into()),
+            ..Default::default()
+        }),
+    );
+    dal.new_label(
+        "The Quick Brown Fox Jumps Over The Lazy Dog",
+        Some(panel),
+        Some(TextStyle {
+            color: Color::risd_blue,
+            font_size: 32.0,
+            weight: Weight::BOLD,
+            font_family: FamilyOwned::Name("Fantasque Sans Mono".into()),
+            ..Default::default()
+        }),
+    );
+    dal.new_label(
+        "The Quick Brown Fox Jumps Over The Lazy Dog",
+        Some(panel),
+        Some(TextStyle {
+            color: Color::risd_blue,
+            font_size: 32.0,
+            weight: Weight::BOLD,
+            font_family: FamilyOwned::Name("Fantasque Sans Mono".into()),
+            ..Default::default()
+        }),
+    );
+    dal.new_label(
+        "The Quick Brown Fox Jumps Over The Lazy Dog",
+        Some(panel),
+        Some(TextStyle {
+            color: Color::risd_blue,
+            font_size: 32.0,
+            weight: Weight::BOLD,
+            font_family: FamilyOwned::Name("Fantasque Sans Mono".into()),
+            ..Default::default()
+        }),
+    );
+    dal.new_label(
+        "The Quick Brown Fox Jumps Over The Lazy Dog",
+        Some(panel),
+        Some(TextStyle {
+            color: Color::risd_blue,
+            font_size: 32.0,
+            weight: Weight::BOLD,
+            font_family: FamilyOwned::Name("Fantasque Sans Mono".into()),
+            ..Default::default()
+        }),
+    );
+    dal.new_label(
+        "The Quick Brown Fox Jumps Over The Lazy Dog",
+        Some(panel),
+        Some(TextStyle {
+            color: Color::risd_blue,
+            font_size: 32.0,
+            weight: Weight::BOLD,
+            font_family: FamilyOwned::Name("Fantasque Sans Mono".into()),
+            ..Default::default()
+        }),
+    );
+    dal.new_label(
+        "The Quick Brown Fox Jumps Over The Lazy Dog",
+        Some(panel),
+        Some(TextStyle {
+            color: Color::risd_blue,
+            font_size: 32.0,
+            weight: Weight::BOLD,
+            font_family: FamilyOwned::Name("Fantasque Sans Mono".into()),
+            ..Default::default()
+        }),
+    );
+    dal.new_label(
+        "The Quick Brown Fox Jumps Over The Lazy Dog",
+        Some(panel),
+        Some(TextStyle {
+            color: Color::risd_blue,
+            font_size: 32.0,
+            weight: Weight::BOLD,
+            font_family: FamilyOwned::Name("Fantasque Sans Mono".into()),
+            ..Default::default()
+        }),
+    );
+    dal.new_label(
+        "The Quick Brown Fox Jumps Over The Lazy Dog",
+        Some(panel),
+        Some(TextStyle {
+            color: Color::risd_blue,
+            font_size: 32.0,
+            weight: Weight::BOLD,
+            font_family: FamilyOwned::Name("Fantasque Sans Mono".into()),
+            ..Default::default()
+        }),
+    );
+    dal.new_label(
+        "The Quick Brown Fox Jumps Over The Lazy Dog",
+        Some(panel),
+        Some(TextStyle {
+            color: Color::risd_blue,
+            font_size: 32.0,
+            weight: Weight::BOLD,
+            font_family: FamilyOwned::Name("Fantasque Sans Mono".into()),
             ..Default::default()
         }),
     );
 
     let _ = dal.new_button(
         "Click Me!".to_string(),
-        Some(&panel.frame()),
+        Some(panel),
         move |dal, _event| {
             dal.set_label_text(label, "You clicked the button!".to_string());
         },
+        Some(TextStyle {
+            font_size: 14.0,
+            weight: Weight::BOLD,
+            font_family: FamilyOwned::Name("Fantasque Sans Mono".into()),
+            ..Default::default()
+        }),
     );
 
     dal.debug();

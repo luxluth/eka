@@ -101,6 +101,17 @@ impl DrawCommand {
                 };
 
                 let buffer = buffer.clone();
+
+                // let total_text_height = buffer
+                //     .layout_runs()
+                //     .last()
+                //     .map(|run| run.line_y + run.line_height)
+                //     .unwrap_or(0.0);
+                //
+                // let container_h = space.height.unwrap_or(0) as f32;
+                //
+                // let center_offset_y = ((container_h - total_text_height) / 2.0).max(0.0);
+
                 let mut vertices = vec![];
                 buffer.draw(
                     &mut dal.font_system,
@@ -110,10 +121,9 @@ impl DrawCommand {
                         if c.a() == 0 {
                             return;
                         }
-                        // Text usually needs to sit slightly *above* the container
-                        // it belongs to. If your z_index logic in DAL is strict
-                        // (Background=0, Text=1), passing *z_index is fine.
-                        // If Background=0 and Text=0, you might want to do (*z_index + 1) here.
+
+                        // let final_y = y + (center_offset_y as i32);
+
                         vertices.extend(Self::rect_vertices(
                             screen_size,
                             *z_index,

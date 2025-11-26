@@ -42,7 +42,10 @@ impl Label {
         buffer.set_text(
             font_system,
             &text,
-            &attrs,
+            &Attrs {
+                family: text_style.font_family.as_family(),
+                ..attrs
+            },
             Shaping::Advanced,
             Some(text_style.align),
         );
@@ -108,21 +111,37 @@ impl Label {
     }
 
     fn measure_buffer(buffer: &Buffer) -> (u32, u32) {
-        let measured_width = buffer
-            .layout_runs()
-            .map(|run| run.line_w)
-            .max_by(|a, b| a.partial_cmp(b).unwrap())
-            .unwrap_or(0.0)
-            .ceil() as u32;
+        // let measured_width = buffer
+        //     .layout_runs()
+        //     .map(|run| run.line_w)
+        //     .max_by(|a, b| a.partial_cmp(b).unwrap())
+        //     .unwrap_or(0.0)
+        //     .ceil() as u32;
+        //
+        // let metrics_line_height = buffer.metrics().line_height;
+        // let measured_height = if let Some(last_run) = buffer.layout_runs().last() {
+        //     (last_run.line_y + metrics_line_height).ceil() as u32
+        // } else {
+        //     0
+        // };
+        //
+        // (measured_width, measured_height)
 
-        let metrics_line_height = buffer.metrics().line_height;
-        let measured_height = if let Some(last_run) = buffer.layout_runs().last() {
-            (last_run.line_y + metrics_line_height).ceil() as u32
-        } else {
-            0
-        };
+        let mut width = 0.0f32;
+        let mut height = 0.0f32;
 
-        (measured_width, measured_height)
+        // Calculate the bounding box of the text
+        for run in buffer.layout_runs() {
+            width = width.max(run.line_w);
+            // The bottom of this line is its Y position + its height
+            height = run.line_y + run.line_height;
+        }
+
+        // We add +1 to the width to account for anti-aliasing spill
+        // or slight glyph overhangs that aren't captured in `line_w`.
+        // Without this, the last pixel of the last letter often draws
+        // outside the background rect.
+        (width.ceil() as u32 + 1, height.ceil() as u32)
     }
 
     pub(crate) fn remeasure_and_push(
@@ -131,12 +150,19 @@ impl Label {
         font_system: &mut FontSystem,
     ) {
         if let Some(buffer) = root.get_binding_mut::<Buffer>(self.buffer_ref) {
+            let attrs = self.text_style.as_cosmic_attrs();
+            let metrics = self.text_style.as_cosmic_metrics();
+            buffer.set_metrics(font_system, metrics);
+
             buffer.set_text(
                 font_system,
                 &self.text,
-                &Attrs::new(),
+                &Attrs {
+                    family: self.text_style.font_family.as_family(),
+                    ..attrs
+                },
                 Shaping::Advanced,
-                None,
+                Some(self.text_style.align),
             );
 
             buffer.shape_until_scroll(font_system, true);
