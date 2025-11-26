@@ -12,19 +12,21 @@ use vulkano::{
         Device, DeviceCreateInfo, DeviceExtensions, Queue, QueueCreateInfo, QueueFlags,
         physical::PhysicalDeviceType,
     },
-    image::{Image, ImageUsage, view::ImageView},
+    format::Format,
+    image::{Image, ImageCreateInfo, ImageType, ImageUsage, view::ImageView},
     instance::{Instance, InstanceCreateFlags, InstanceCreateInfo},
-    memory::allocator::StandardMemoryAllocator,
+    memory::allocator::{AllocationCreateInfo, StandardMemoryAllocator},
     pipeline::{
         DynamicState, GraphicsPipeline, PipelineLayout, PipelineShaderStageCreateInfo,
         graphics::{
             GraphicsPipelineCreateInfo,
             color_blend::{ColorBlendAttachmentState, ColorBlendState},
+            depth_stencil::{CompareOp, DepthState, DepthStencilState},
             input_assembly::InputAssemblyState,
             multisample::MultisampleState,
-            rasterization::RasterizationState,
+            rasterization::{CullMode, RasterizationState},
             vertex_input::{Vertex, VertexDefinition},
-            viewport::{Viewport, ViewportState},
+            viewport::{Scissor, Viewport, ViewportState},
         },
         layout::PipelineDescriptorSetLayoutCreateInfo,
     },
@@ -32,7 +34,7 @@ use vulkano::{
     swapchain::{
         Surface, Swapchain, SwapchainCreateInfo, SwapchainPresentInfo, acquire_next_image,
     },
-    sync::{self, GpuFuture},
+    sync::{self, GpuFuture, future::FenceSignalFuture},
 };
 use winit::{
     application::ApplicationHandler,
@@ -41,6 +43,8 @@ use winit::{
     event_loop::{ActiveEventLoop, EventLoop},
     window::Window,
 };
+
+use log::{debug, warn};
 
 pub struct Application {
     instance: Arc<Instance>,
@@ -60,22 +64,38 @@ struct RenderContext {
     pipeline: Arc<GraphicsPipeline>,
     viewport: Viewport,
     recreate_swapchain: bool,
-    previous_frame_end: Option<Box<dyn GpuFuture>>,
+    fences: Vec<Option<Arc<FenceSignalFuture<Box<dyn GpuFuture>>>>>,
 }
 
 fn window_size_dependent_setup(
     images: &[Arc<Image>],
     render_pass: &Arc<RenderPass>,
+    memory_allocator: &Arc<StandardMemoryAllocator>,
 ) -> Vec<Arc<Framebuffer>> {
     images
         .iter()
         .map(|image| {
             let view = ImageView::new_default(image.clone()).unwrap();
 
+            let depth_buffer = Image::new(
+                memory_allocator.clone(),
+                ImageCreateInfo {
+                    image_type: ImageType::Dim2d,
+                    format: Format::D16_UNORM, // Must match RenderPass
+                    extent: image.extent(),
+                    usage: ImageUsage::DEPTH_STENCIL_ATTACHMENT | ImageUsage::TRANSIENT_ATTACHMENT,
+                    ..Default::default()
+                },
+                AllocationCreateInfo::default(),
+            )
+            .unwrap();
+
+            let depth_view = ImageView::new_default(depth_buffer).unwrap();
+
             Framebuffer::new(
                 render_pass.clone(),
                 FramebufferCreateInfo {
-                    attachments: vec![view],
+                    attachments: vec![view, depth_view],
                     ..Default::default()
                 },
             )
@@ -89,12 +109,23 @@ impl Application {
         let library = VulkanLibrary::new().unwrap();
 
         let required_extensions = Surface::required_extensions(event_loop).unwrap();
+        let layers = vec![String::from("VK_LAYER_KHRONOS_validation")];
+        let available_layers = library.layer_properties().unwrap();
+        if available_layers
+            .into_iter()
+            .all(|l| l.name() != "VK_LAYER_KHRONOS_validation")
+        {
+            warn!(
+                "VK_LAYER_KHRONOS_validation is not available. Install the Vulkan SDK to get validation layers."
+            )
+        }
 
         let instance = Instance::new(
             library,
             InstanceCreateInfo {
                 flags: InstanceCreateFlags::ENUMERATE_PORTABILITY,
                 enabled_extensions: required_extensions,
+                enabled_layers: layers,
                 ..Default::default()
             },
         )
@@ -127,12 +158,12 @@ impl Application {
                 PhysicalDeviceType::Other => 4,
                 _ => 5,
             })
-            .expect("No suitable physical device found");
+            .expect("[error::vulkan]: No suitable physical device found");
 
-        eprintln!(
-            "[debug::vulkan]: using device: {} (type: {:?})",
+        debug!(
+            "using device: {} (type: {:?})",
             physical_device.properties().device_name,
-            physical_device.properties().device_type,
+            physical_device.properties().device_type
         );
 
         let (device, mut queues) = Device::new(
@@ -177,13 +208,13 @@ mod vs {
         src: r"
                #version 450
 
-               layout(location = 0) in vec2 position;
+               layout(location = 0) in vec3 position;
                layout(location = 1) in vec4 color;
 
                layout(location = 0) out vec4 v_color;
 
                void main() {
-                   gl_Position = vec4(position, 0.0, 1.0);
+                   gl_Position = vec4(position.x, position.y, position.z, 1.0);
                    v_color = color;
                }
            "
@@ -257,6 +288,8 @@ impl ApplicationHandler for Application {
             .unwrap()
         };
 
+        self.gui_renderer.resize(images.len());
+
         let render_pass = vulkano::single_pass_renderpass!(
             self.device.clone(),
             attachments: {
@@ -265,17 +298,24 @@ impl ApplicationHandler for Application {
                     samples: 1,
                     load_op: Clear,
                     store_op: Store,
+                },
+                depth_stencil: {
+                    format: Format::D16_UNORM, // Standard depth format
+                    samples: 1,
+                    load_op: Clear,
+                    store_op: DontCare,
                 }
             },
 
             pass: {
                 color: [color],
-                depth_stencil: {},
+                depth_stencil: {depth_stencil},
             }
         )
         .unwrap();
 
-        let framebuffers = window_size_dependent_setup(&images, &render_pass);
+        let framebuffers =
+            window_size_dependent_setup(&images, &render_pass, &self.gui_renderer.memory_allocator);
 
         let pipeline = {
             let vs = vs::load(self.device.clone())
@@ -313,7 +353,10 @@ impl ApplicationHandler for Application {
                     vertex_input_state: Some(vertex_input_state),
                     input_assembly_state: Some(InputAssemblyState::default()),
                     viewport_state: Some(ViewportState::default()),
-                    rasterization_state: Some(RasterizationState::default()),
+                    rasterization_state: Some(RasterizationState {
+                        cull_mode: CullMode::None,
+                        ..Default::default()
+                    }),
                     multisample_state: Some(MultisampleState::default()),
                     color_blend_state: Some(ColorBlendState::with_attachment_states(
                         subpass.num_color_attachments(),
@@ -324,8 +367,17 @@ impl ApplicationHandler for Application {
                             ..Default::default()
                         },
                     )),
-                    dynamic_state: [DynamicState::Viewport].into_iter().collect(),
+                    dynamic_state: [DynamicState::Viewport, DynamicState::Scissor]
+                        .into_iter()
+                        .collect(),
                     subpass: Some(subpass.into()),
+                    depth_stencil_state: Some(DepthStencilState {
+                        depth: Some(DepthState {
+                            compare_op: CompareOp::LessOrEqual, // Closer things overwrite further things
+                            write_enable: true,
+                        }),
+                        ..Default::default()
+                    }),
                     ..GraphicsPipelineCreateInfo::layout(layout)
                 },
             )
@@ -339,7 +391,7 @@ impl ApplicationHandler for Application {
         };
 
         let recreate_swapchain = false;
-        let previous_frame_end = Some(sync::now(self.device.clone()).boxed());
+        let fences = vec![None; images.len()];
 
         self.rcx = Some(RenderContext {
             window,
@@ -349,7 +401,7 @@ impl ApplicationHandler for Application {
             pipeline,
             viewport,
             recreate_swapchain,
-            previous_frame_end,
+            fences,
         });
     }
 
@@ -376,8 +428,6 @@ impl ApplicationHandler for Application {
                     return;
                 }
 
-                rcx.previous_frame_end.as_mut().unwrap().cleanup_finished();
-
                 if rcx.recreate_swapchain {
                     let (new_swapchain, new_images) = rcx
                         .swapchain
@@ -388,9 +438,15 @@ impl ApplicationHandler for Application {
                         .expect("failed to recreate swapchain");
 
                     rcx.swapchain = new_swapchain;
-                    rcx.framebuffers = window_size_dependent_setup(&new_images, &rcx.render_pass);
+                    rcx.framebuffers = window_size_dependent_setup(
+                        &new_images,
+                        &rcx.render_pass,
+                        &self.gui_renderer.memory_allocator,
+                    );
                     rcx.viewport.extent = window_size.into();
                     rcx.recreate_swapchain = false;
+                    self.gui_renderer.resize(new_images.len());
+                    rcx.fences.resize(new_images.len(), None);
                 }
 
                 let (image_index, suboptimal, acquire_future) = match acquire_next_image(
@@ -411,6 +467,11 @@ impl ApplicationHandler for Application {
                     rcx.recreate_swapchain = true;
                 }
 
+                if let Some(image_fence) = &mut rcx.fences[image_index as usize] {
+                    image_fence.wait(None).unwrap();
+                    image_fence.cleanup_finished();
+                }
+
                 let mut builder = AutoCommandBufferBuilder::primary(
                     self.command_buffer_allocator.clone(),
                     self.queue.queue_family_index(),
@@ -418,10 +479,18 @@ impl ApplicationHandler for Application {
                 )
                 .unwrap();
 
+                let scissor = Scissor {
+                    offset: [rcx.viewport.offset[0] as u32, rcx.viewport.offset[1] as u32],
+                    extent: [rcx.viewport.extent[0] as u32, rcx.viewport.extent[1] as u32],
+                };
+
                 builder
                     .begin_render_pass(
                         RenderPassBeginInfo {
-                            clear_values: vec![Some([0., 0., 0., 0.0].into())],
+                            clear_values: vec![
+                                Some([0., 0., 0., 0.0].into()), // Color
+                                Some(1.0f32.into()),            // Depth
+                            ],
                             ..RenderPassBeginInfo::framebuffer(
                                 rcx.framebuffers[image_index as usize].clone(),
                             )
@@ -434,23 +503,32 @@ impl ApplicationHandler for Application {
                     .unwrap()
                     .set_viewport(0, [rcx.viewport.clone()].into_iter().collect())
                     .unwrap()
+                    .set_scissor(0, [scissor].into_iter().collect())
+                    .unwrap()
                     .bind_pipeline_graphics(rcx.pipeline.clone())
                     .unwrap();
 
                 self.dal.compute_layout();
+                let commands = self.dal.render();
                 let size = [window_size.width as f32, window_size.height as f32];
-                self.gui_renderer
-                    .upload_draw_commands(&self.dal.render(), size, &mut self.dal);
-                self.gui_renderer.render(&mut builder, rcx.pipeline.clone());
+
+                if commands.is_empty() {
+                    debug!("Frame {}: No draw commands generated!", image_index);
+                }
+
+                self.gui_renderer.upload_draw_commands(
+                    image_index as usize,
+                    &commands,
+                    size,
+                    &mut self.dal,
+                );
+                self.gui_renderer.render(image_index as usize, &mut builder);
 
                 builder.end_render_pass(Default::default()).unwrap();
 
                 let command_buffer = builder.build().unwrap();
 
-                let future = rcx
-                    .previous_frame_end
-                    .take()
-                    .unwrap()
+                let logic_future = sync::now(self.device.clone())
                     .join(acquire_future)
                     .then_execute(self.queue.clone(), command_buffer)
                     .unwrap()
@@ -461,15 +539,18 @@ impl ApplicationHandler for Application {
                             image_index,
                         ),
                     )
-                    .then_signal_fence_and_flush();
+                    .boxed();
 
-                match future.map_err(Validated::unwrap) {
+                let fence_future = logic_future.then_signal_fence_and_flush();
+
+                match fence_future.map_err(Validated::unwrap) {
                     Ok(future) => {
-                        rcx.previous_frame_end = Some(future.boxed());
+                        rcx.fences[image_index as usize] = Some(Arc::new(future));
                     }
                     Err(VulkanError::OutOfDate) => {
                         rcx.recreate_swapchain = true;
-                        rcx.previous_frame_end = Some(sync::now(self.device.clone()).boxed());
+                        // For safe recovery, we can just clear the fence or keep the old one
+                        // rcx.fences[image_index as usize] = None;
                     }
                     Err(e) => {
                         panic!("[error::vulkan]: failed to flush future: {e}");

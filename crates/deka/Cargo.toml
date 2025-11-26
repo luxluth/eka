@@ -9,6 +9,7 @@ description = "eka core gui abstraction"
 heka = { path = "../heka/" }
 winit = { workspace = true }
 env_logger = { workspace = true }
+log = { workspace = true }
 cosmic-text = { workspace = true }
 vulkano-util = { workspace = true }
 vulkano = { workspace = true }
