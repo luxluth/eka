@@ -57,6 +57,5 @@ fn main() -> Result<(), impl std::error::Error> {
         }),
     );
 
-    dal.debug();
     dal.run()
 }

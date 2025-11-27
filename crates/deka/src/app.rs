@@ -1,4 +1,4 @@
-use crate::renderer::gui::utils::TVertex;
+use crate::renderer::{gui::utils::TVertex, shaders};
 
 use super::{DAL, renderer::gui::GuiRenderer};
 use std::sync::Arc;
@@ -202,41 +202,6 @@ impl Application {
     }
 }
 
-mod vs {
-    vulkano_shaders::shader! {
-        ty: "vertex",
-        src: r"
-               #version 450
-
-               layout(location = 0) in vec3 position;
-               layout(location = 1) in vec4 color;
-
-               layout(location = 0) out vec4 v_color;
-
-               void main() {
-                   gl_Position = vec4(position.x, position.y, position.z, 1.0);
-                   v_color = color;
-               }
-           "
-    }
-}
-
-mod fs {
-    vulkano_shaders::shader! {
-        ty: "fragment",
-        src: r"
-               #version 450
-
-               layout(location = 0) in vec4 v_color;
-               layout(location = 0) out vec4 f_color;
-
-               void main() {
-                   f_color = v_color;
-               }
-           "
-    }
-}
-
 impl ApplicationHandler for Application {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         let window = Arc::new(
@@ -318,12 +283,12 @@ impl ApplicationHandler for Application {
             window_size_dependent_setup(&images, &render_pass, &self.gui_renderer.memory_allocator);
 
         let pipeline = {
-            let vs = vs::load(self.device.clone())
+            let vs = shaders::rectvs::load(self.device.clone())
                 .unwrap()
                 .entry_point("main")
                 .unwrap();
 
-            let fs = fs::load(self.device.clone())
+            let fs = shaders::rectfs::load(self.device.clone())
                 .unwrap()
                 .entry_point("main")
                 .unwrap();
