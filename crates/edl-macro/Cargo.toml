@@ -1,0 +1,14 @@
+[package]
+name = "edl-macro"
+edition.workspace = true
+version.workspace = true
+authors.workspace = true
+description = "eka ui description language"
+
+[dependencies]
+
+[lib]
+proc-macro = true
+
+[features]
+default = []
