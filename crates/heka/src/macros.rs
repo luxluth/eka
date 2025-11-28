@@ -107,7 +107,7 @@ macro_rules! color {
 #[macro_export]
 macro_rules! rgb {
     ($r:expr, $g:expr, $b:expr) => {
-        $crate::Color {
+        $crate::color::Color {
             r: $r,
             g: $g,
             b: $b,
@@ -120,7 +120,7 @@ macro_rules! rgb {
 #[macro_export]
 macro_rules! rgba {
     ($r:expr, $g:expr, $b:expr, $a:expr) => {
-        $crate::Color {
+        $crate::color::Color {
             r: $r,
             g: $g,
             b: $b,
@@ -136,12 +136,47 @@ macro_rules! rgba {
 #[macro_export]
 macro_rules! pad {
     ($value:expr) => {
-        $crate::sizing::Padding::new_all($value)
+        $crate::sizing::Padding::all($value)
     };
     ($lr:expr, $tb:expr) => {
-        $crate::sizing::Padding::new_lr_tb($lr, $tb)
+        $crate::sizing::Padding::lr_tb($lr, $tb)
     };
     ($l:expr, $r:expr, $t:expr, $b:expr) => {
         $crate::sizing::Padding::new($l, $r, $t, $b)
+    };
+}
+
+/// Convinient macro to specify margin
+/// `margin!(10)` -> 10 pixel unit on 4 sides
+/// `margin!(10, 20)` -> 10 pixel on left and right sides and 10 for the top and bottom sides
+/// `margin!(1, 2, 3, 4)` -> single side margin spec - left, right, top, bottom
+#[macro_export]
+macro_rules! margin {
+    ($value:expr) => {
+        $crate::sizing::Margin::all($value)
+    };
+    ($lr:expr, $tb:expr) => {
+        $crate::sizing::Margin::lr_tb($lr, $tb)
+    };
+    ($l:expr, $r:expr, $t:expr, $b:expr) => {
+        $crate::sizing::Margin::new($l, $r, $t, $b)
+    };
+}
+
+/// Convinient macro to specify border
+/// `border!(12)` `border(12, Color)`
+#[macro_export]
+macro_rules! border {
+    ($size:expr) => {
+        $crate::sizing::Border {
+            size: $size,
+            ..Default::default()
+        }
+    };
+    ($size:expr, $color:expr) => {
+        $crate::sizing::Border {
+            size: $size,
+            color: $color,
+        }
     };
 }

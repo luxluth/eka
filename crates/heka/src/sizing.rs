@@ -1,3 +1,5 @@
+use crate::color::Color;
+
 /// Define dimension specification for a given element.
 /// These specification can either be dynamic or fixed.
 /// fill | fit | ..px | ..%
@@ -127,11 +129,11 @@ macro_rules! dimensioner {
                 }
             }
 
-            pub fn new_all(all: u32) -> Self {
+            pub fn all(all: u32) -> Self {
                 Self::new(all, all, all, all)
             }
 
-            pub fn new_lr_tb(lr: u32, tb: u32) -> Self {
+            pub fn lr_tb(lr: u32, tb: u32) -> Self {
                 Self::new(lr, lr, tb, tb)
             }
         }
@@ -156,3 +158,18 @@ macro_rules! dimensioner {
 
 dimensioner!(Padding, "Pad");
 dimensioner!(Margin, "Mar");
+
+#[derive(Debug, Clone, Copy)]
+pub struct Border {
+    pub size: u32,
+    pub color: Color,
+}
+
+impl Default for Border {
+    fn default() -> Self {
+        Self {
+            size: Default::default(),
+            color: Color::black,
+        }
+    }
+}

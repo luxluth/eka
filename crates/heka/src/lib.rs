@@ -6,7 +6,7 @@ use crate::{
     boxalloc::Allocator,
     color::Color,
     position::{Direction, LayoutStrategy, Position},
-    sizing::{Margin, Padding, SizeSpec},
+    sizing::{Border, Margin, Padding, SizeSpec},
 };
 
 mod boxalloc;
@@ -155,6 +155,8 @@ pub struct Style {
     /// Margin setted for a Frame element
     pub margin: Margin,
 
+    pub border: Border,
+
     /// Defines how much a flex item will grow.
     /// Default is 0.0 (don't grow).
     pub flex_grow: f32,
@@ -195,6 +197,7 @@ impl Default for Style {
             height: SizeSpec::default(),
             padding: Padding::default(),
             margin: Margin::default(),
+            border: Border::default(),
             layout: LayoutStrategy::default(),
             flow: Direction::default(),
             position: Position::default(),
@@ -598,10 +601,12 @@ impl Root {
         space.height = Some(final_h);
 
         // 4 - Calculate My "Content Box" for My Children
-        let content_x = final_x + style.padding.left as i32;
-        let content_y = final_y + style.padding.top as i32;
-        let content_w = final_w.saturating_sub(style.padding.left + style.padding.right);
-        let content_h = final_h.saturating_sub(style.padding.top + style.padding.bottom);
+        let content_x = final_x + style.padding.left as i32 + style.border.size as i32;
+        let content_y = final_y + style.padding.top as i32 + style.border.size as i32;
+        let content_w = final_w
+            .saturating_sub(style.padding.left + style.padding.right + style.border.size * 2);
+        let content_h = final_h
+            .saturating_sub(style.padding.top + style.padding.bottom + style.border.size * 2);
 
         // 5 - Pre-pass: Analyze In-Flow Children for Flex 'Fill'
         // We need to know how many `Fill` children we have to divide space.
@@ -957,13 +962,17 @@ impl Root {
         // `Fill` and `Percent` have 0 desired size in Pass 1. They expand in Pass 2.
         let desired_w = match style.width {
             SizeSpec::Pixel(w) => w,
-            SizeSpec::Fit | SizeSpec::Auto => content_w + style.padding.left + style.padding.right,
+            SizeSpec::Fit | SizeSpec::Auto => {
+                content_w + style.padding.left + style.padding.right + style.border.size * 2
+            }
             SizeSpec::Fill | SizeSpec::Percent(_) => 0,
         };
 
         let desired_h = match style.height {
             SizeSpec::Pixel(h) => h,
-            SizeSpec::Fit | SizeSpec::Auto => content_h + style.padding.top + style.padding.bottom,
+            SizeSpec::Fit | SizeSpec::Auto => {
+                content_h + style.padding.top + style.padding.bottom + style.border.size * 2
+            }
             SizeSpec::Fill | SizeSpec::Percent(_) => 0,
         };
 

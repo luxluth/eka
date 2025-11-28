@@ -25,7 +25,7 @@ fn main() -> Result<(), impl std::error::Error> {
         Style {
             flow: Direction::Column,
             gap: 2,
-            padding: Padding::new_all(20),
+            padding: Padding::all(20),
             width: SizeSpec::Fill,
             height: SizeSpec::Fill,
             ..Default::default()

@@ -6,6 +6,9 @@ authors.workspace = true
 description = "eka ui description language"
 
 [dependencies]
+proc-macro2 = "1.0.103"
+quote = "1.0.42"
+syn = "2.0.111"
 
 [lib]
 proc-macro = true

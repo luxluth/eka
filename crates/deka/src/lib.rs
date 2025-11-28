@@ -3,6 +3,10 @@ use std::collections::HashMap;
 pub use heka;
 use heka::Frame;
 use heka::Style;
+use heka::border;
+use heka::margin;
+use heka::pad;
+use heka::rgb;
 use log::warn;
 pub use text_style::AsCosmicColor;
 pub use text_style::TextStyle;
@@ -257,9 +261,10 @@ impl DAL {
         style!(button_frame, &mut self.root, {
             width: size!(fit),
             height: size!(fit),
-            padding: heka::sizing::Padding::new_lr_tb(4, 2),
-            margin: heka::sizing::Margin::new_lr_tb(0, 4),
-            background_color: heka::color::Color::new(200, 200, 200, 255),
+            padding: pad!(4, 2),
+            margin: margin!(0, 4),
+            border: border!(1),
+            background_color: rgb!(200, 200, 200),
             layout: layout!(flex),
         });
 
