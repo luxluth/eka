@@ -5,6 +5,7 @@ use heka::Frame;
 use heka::Style;
 use heka::align;
 use heka::border;
+use heka::color;
 use heka::justify;
 use heka::margin;
 use heka::pad;
@@ -140,6 +141,7 @@ impl DAL {
             width: size!(fill),
             height: size!(fill),
             layout: layout!(no_layout),
+            background_color: color!(transparent),
         });
 
         let mut elements: HashMap<heka::CapsuleRef, Box<dyn FrameElement>> = HashMap::new();
@@ -267,7 +269,7 @@ impl DAL {
             height: size!(fit),
             padding: pad!(4, 2),
             margin: margin!(0, 4),
-            border: border!(1),
+            border: border!(1, 5, color!(black)),
             justify_content: justify!(center),
             align_items: align!(center),
             background_color: rgb!(200, 200, 200),
@@ -379,31 +381,19 @@ impl DAL {
                 self.root.get_space(*capsule_ref),
                 self.root.get_style(*capsule_ref),
             ) {
-                if style.background_color.a > 0 {
-                    commands.push((
-                        style.z_index,
-                        0,
-                        *capsule_ref,
-                        cmd::DrawCommand::Rect {
-                            space,
-                            color: style.background_color,
-                            z_index: style.z_index,
-                        },
-                    ));
-                }
-
-                if style.border.size > 0 {
-                    commands.push((
-                        style.z_index,
-                        0,
-                        *capsule_ref,
-                        cmd::DrawCommand::Border {
-                            space,
-                            border: style.border,
-                            z_index: style.z_index,
-                        },
-                    ));
-                }
+                commands.push((
+                    style.z_index,
+                    0,
+                    *capsule_ref,
+                    cmd::DrawCommand::Rect {
+                        space,
+                        fill_color: style.background_color,
+                        stroke_color: style.border.color,
+                        z_index: style.z_index,
+                        border_radius: style.border.radius,
+                        stroke_width: style.border.size,
+                    },
+                ));
 
                 if let Some(label) = element.as_any().downcast_ref::<Label>() {
                     if let Some(data_ref) = element.data_ref() {

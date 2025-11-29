@@ -19,6 +19,12 @@ pub mod utils {
         pub color: [f32; 4],
         #[format(R32G32_SFLOAT)]
         pub uv: [f32; 2],
+        #[format(R32G32_SFLOAT)]
+        pub size: [f32; 2],
+        #[format(R32_SFLOAT)]
+        pub radius: f32,
+        #[format(R32_SFLOAT)]
+        pub stroke_width: f32,
     }
 }
 

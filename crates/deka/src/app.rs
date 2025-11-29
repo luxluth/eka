@@ -214,6 +214,7 @@ impl ApplicationHandler for Application {
                             self.dal.attr.size.0,
                             self.dal.attr.size.1,
                         ))
+                        .with_transparent(true)
                         .with_decorations(false),
                 )
                 .unwrap(),
