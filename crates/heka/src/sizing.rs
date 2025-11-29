@@ -162,6 +162,7 @@ dimensioner!(Margin, "Mar");
 #[derive(Debug, Clone, Copy)]
 pub struct Border {
     pub size: u32,
+    pub radius: u32,
     pub color: Color,
 }
 
@@ -169,6 +170,7 @@ impl Default for Border {
     fn default() -> Self {
         Self {
             size: Default::default(),
+            radius: 0,
             color: Color::black,
         }
     }

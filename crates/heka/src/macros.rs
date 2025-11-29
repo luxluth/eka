@@ -285,8 +285,9 @@ macro_rules! margin {
 ///
 /// # Examples
 /// ```rust,ignore
-/// border!(2);              // 2px wide, default color (Black/Transparent)
-/// border!(2, color!(red)); // 2px wide, Red
+/// border!(2);                 // 2px wide, default color (Black/Transparent)
+/// border!(2, color!(red));    // 2px wide, Red
+/// border!(2, 5, color!(red)); // 2px wide, 5px radius, Red
 /// ```
 #[macro_export]
 macro_rules! border {
@@ -300,8 +301,21 @@ macro_rules! border {
         $crate::sizing::Border {
             size: $size,
             color: $color,
+            ..Default::default()
         }
     };
+    ($size:expr, $radius:expr, $color:expr) => {
+        $crate::sizing::Border {
+            size: $size,
+            radius: $radius,
+            color: $color,
+        }
+    }; // Ambiguity resolution: If 2 args are numbers, assume size and radius.
+       // If 2 args are number and Color (expr), it's handled by the macro matcher if types were checked,
+       // but macro matching is purely syntactic.
+       // We can't easily distinguish `border!(2, 5)` vs `border!(2, color!(RED))`.
+       // So we rely on explicit usage or differing syntax if needed.
+       // However, since `color!` expands to `Color::...`, we can try to add a variant for 3 args.
 }
 
 /// Sets the distribution of children along the **main axis**.
