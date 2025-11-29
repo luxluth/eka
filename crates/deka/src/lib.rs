@@ -3,7 +3,9 @@ use std::collections::HashMap;
 pub use heka;
 use heka::Frame;
 use heka::Style;
+use heka::align;
 use heka::border;
+use heka::justify;
 use heka::margin;
 use heka::pad;
 use heka::rgb;
@@ -159,7 +161,9 @@ impl DAL {
             mouse_pressed: false,
         }
     }
+}
 
+impl DAL {
     pub fn new_label<S: ToString>(
         &mut self,
         text: S,
@@ -264,6 +268,8 @@ impl DAL {
             padding: pad!(4, 2),
             margin: margin!(0, 4),
             border: border!(1),
+            justify_content: justify!(center),
+            align_items: align!(center),
             background_color: rgb!(200, 200, 200),
             layout: layout!(flex),
         });
@@ -285,56 +291,9 @@ impl DAL {
 
         ButtonRef(button_ref)
     }
+}
 
-    pub fn render(&self) -> Vec<cmd::DrawCommand> {
-        // Tuple: (Z-Index, Priority, CapsuleRef, Command)
-        // Priority: 0 for Rects, 1 for Text. Ensures Text is always ON TOP of Rects for same Z.
-        // CapsuleRef: Used as a stable tie-breaker to prevent HashMap-induced flickering.
-
-        let mut commands = Vec::with_capacity(self.elements.len());
-
-        for (capsule_ref, element) in &self.elements {
-            // Get the computed layout and style
-            if let (Some(space), Some(style)) = (
-                self.root.get_space(*capsule_ref),
-                self.root.get_style(*capsule_ref),
-            ) {
-                if style.background_color.a > 0 {
-                    commands.push((
-                        style.z_index,
-                        0,
-                        *capsule_ref,
-                        cmd::DrawCommand::Rect {
-                            space,
-                            color: style.background_color,
-                            z_index: style.z_index,
-                        },
-                    ));
-                }
-
-                if let Some(label) = element.as_any().downcast_ref::<Label>() {
-                    if let Some(data_ref) = element.data_ref() {
-                        commands.push((
-                            style.z_index,
-                            1,
-                            *capsule_ref,
-                            cmd::DrawCommand::Text {
-                                space,
-                                buffer_ref: data_ref,
-                                style: label.text_style.clone(),
-                                z_index: style.z_index,
-                            },
-                        ));
-                    }
-                }
-            }
-        }
-
-        // Z-Index (Logic) -> Priority (Text > Rect) -> CapsuleRef (Stability)
-        commands.sort_by(|a, b| a.0.cmp(&b.0).then(a.1.cmp(&b.1)).then(a.2.cmp(&b.2)));
-        commands.into_iter().map(|(_, _, _, cmd)| cmd).collect()
-    }
-
+impl DAL {
     pub fn run(self) -> Result<(), impl std::error::Error> {
         use winit::event_loop::EventLoop;
         let _ = env_logger::try_init();
@@ -356,10 +315,12 @@ impl DAL {
     }
 
     /// Resizes the root window.
-    pub fn resize(&mut self, new_width: u32, new_height: u32) {
+    pub(crate) fn resize(&mut self, new_width: u32, new_height: u32) {
         self.root.resize(new_width, new_height);
     }
+}
 
+impl DAL {
     pub(crate) fn click(&mut self, mouse_button: MouseButton, pressed: bool) {
         if pressed {
             self.mouse_pressed = true;
@@ -402,7 +363,73 @@ impl DAL {
             }
         }
     }
+}
 
+impl DAL {
+    pub fn render(&self) -> Vec<cmd::DrawCommand> {
+        // Tuple: (Z-Index, Priority, CapsuleRef, Command)
+        // Priority: 0 for Rects, 1 for Text. Ensures Text is always ON TOP of Rects for same Z.
+        // CapsuleRef: Used as a stable tie-breaker to prevent HashMap-induced flickering.
+
+        let mut commands = Vec::with_capacity(self.elements.len());
+
+        for (capsule_ref, element) in &self.elements {
+            // Get the computed layout and style
+            if let (Some(space), Some(style)) = (
+                self.root.get_space(*capsule_ref),
+                self.root.get_style(*capsule_ref),
+            ) {
+                if style.background_color.a > 0 {
+                    commands.push((
+                        style.z_index,
+                        0,
+                        *capsule_ref,
+                        cmd::DrawCommand::Rect {
+                            space,
+                            color: style.background_color,
+                            z_index: style.z_index,
+                        },
+                    ));
+                }
+
+                if style.border.size > 0 {
+                    commands.push((
+                        style.z_index,
+                        0,
+                        *capsule_ref,
+                        cmd::DrawCommand::Border {
+                            space,
+                            border: style.border,
+                            z_index: style.z_index,
+                        },
+                    ));
+                }
+
+                if let Some(label) = element.as_any().downcast_ref::<Label>() {
+                    if let Some(data_ref) = element.data_ref() {
+                        commands.push((
+                            style.z_index,
+                            1,
+                            *capsule_ref,
+                            cmd::DrawCommand::Text {
+                                space,
+                                buffer_ref: data_ref,
+                                style: label.text_style.clone(),
+                                z_index: style.z_index,
+                            },
+                        ));
+                    }
+                }
+            }
+        }
+
+        // Z-Index (Logic) -> Priority (Text > Rect) -> CapsuleRef (Stability)
+        commands.sort_by(|a, b| a.0.cmp(&b.0).then(a.1.cmp(&b.1)).then(a.2.cmp(&b.2)));
+        commands.into_iter().map(|(_, _, _, cmd)| cmd).collect()
+    }
+}
+
+impl DAL {
     pub fn get_buffer<T: 'static>(&self, buffer_ref: usize) -> Option<&T> {
         self.root.get_binding(buffer_ref)
     }
@@ -410,8 +437,10 @@ impl DAL {
     pub fn get_buffer_mut<T: 'static>(&mut self, buffer_ref: usize) -> Option<&mut T> {
         self.root.get_binding_mut(buffer_ref)
     }
+}
 
-    #[cfg(feature = "debug")]
+#[cfg(feature = "debug")]
+impl DAL {
     pub fn debug(&self) {
         self.root.debug_layout_tree();
     }

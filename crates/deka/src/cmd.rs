@@ -20,6 +20,11 @@ pub enum DrawCommand {
         style: TextStyle,
         z_index: u32,
     },
+    Border {
+        space: heka::Space,
+        border: heka::sizing::Border,
+        z_index: u32,
+    },
     // `Image { ... }`, `Svg { ... }`, etc.
 }
 
@@ -137,6 +142,65 @@ impl DrawCommand {
                         ));
                     },
                 );
+
+                vertices
+            }
+            DrawCommand::Border {
+                space,
+                border,
+                z_index,
+            } => {
+                let x = space.x;
+                let y = space.y;
+                let w = space.width.unwrap_or(0);
+                let h = space.height.unwrap_or(0);
+                let b = border.size;
+
+                if w == 0 || h == 0 || b == 0 {
+                    return vec![];
+                }
+
+                let mut vertices = Vec::with_capacity(24);
+
+                let mut push_side = |sx: i32, sy: i32, sw: u32, sh: u32| {
+                    vertices.extend(Self::rect_vertices(
+                        screen_size,
+                        *z_index,
+                        &Space {
+                            x: sx,
+                            y: sy,
+                            width: Some(sw),
+                            height: Some(sh),
+                        },
+                        &border.color,
+                    ));
+                };
+
+                // top
+                // Full width, height is border size
+                push_side(x, y, w, b);
+
+                // bottom
+                // Full width, sits at the bottom edge.
+                // Check if height > border size to prevent drawing on top of the top border
+                if h > b {
+                    push_side(x, y + (h - b) as i32, w, b);
+                }
+
+                // left
+                // Width is border size.
+                // Height is (Total Height - 2 * Border Size) to fit between Top and Bottom.
+                if h > 2 * b {
+                    let side_h = h - (2 * b);
+                    push_side(x, y + b as i32, b, side_h);
+                }
+
+                // right
+                // Same vertical logic as Left Side, but positioned at the far right.
+                if w > b && h > 2 * b {
+                    let side_h = h - (2 * b);
+                    push_side(x + (w - b) as i32, y + b as i32, b, side_h);
+                }
 
                 vertices
             }
