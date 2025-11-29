@@ -81,6 +81,75 @@ impl Color {
     }
 }
 
+impl Color {
+    /// Creates a new Color from HSL values.
+    ///
+    /// * `h` - Hue in degrees (0.0 - 360.0)
+    /// * `s` - Saturation (0.0 - 1.0)
+    /// * `l` - Lightness (0.0 - 1.0)
+    pub const fn from_hsl(h: f32, s: f32, l: f32) -> Self {
+        let r;
+        let g;
+        let b;
+
+        if s == 0.0 {
+            // Achromatic (Grey)
+            r = l;
+            g = l;
+            b = l;
+        } else {
+            let q = if l < 0.5 {
+                l * (1.0 + s)
+            } else {
+                l + s - l * s
+            };
+            let p = 2.0 * l - q;
+
+            // Normalize Hue to 0.0 - 1.0
+            let h_norm = h / 360.0;
+
+            r = hue_to_rgb(p, q, h_norm + 1.0 / 3.0);
+            g = hue_to_rgb(p, q, h_norm);
+            b = hue_to_rgb(p, q, h_norm - 1.0 / 3.0);
+        }
+
+        Self {
+            r: (r * 255.0).round() as u8,
+            g: (g * 255.0).round() as u8,
+            b: (b * 255.0).round() as u8,
+            a: 255, // Default opaque
+        }
+    }
+
+    /// Same as from_hsl, but with an alpha channel (0.0 - 1.0)
+    pub const fn from_hsla(h: f32, s: f32, l: f32, a: f32) -> Self {
+        let mut color = Self::from_hsl(h, s, l);
+        color.a = (a * 255.0).round() as u8;
+        color
+    }
+}
+
+// Helper function for HSL conversion
+const fn hue_to_rgb(p: f32, q: f32, mut t: f32) -> f32 {
+    if t < 0.0 {
+        t += 1.0;
+    }
+    if t > 1.0 {
+        t -= 1.0;
+    }
+
+    if t < 1.0 / 6.0 {
+        return p + (q - p) * 6.0 * t;
+    }
+    if t < 1.0 / 2.0 {
+        return q;
+    }
+    if t < 2.0 / 3.0 {
+        return p + (q - p) * (2.0 / 3.0 - t) * 6.0;
+    }
+    return p;
+}
+
 impl Default for Color {
     fn default() -> Self {
         Color::Hex(0xFFFFFFFF)
