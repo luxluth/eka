@@ -1,11 +1,6 @@
 use cosmic_text::FamilyOwned;
 use deka::{DAL, TextStyle, WindowAttr};
-use heka::{
-    Style,
-    color::Color,
-    position::{AlignItems, Direction, JustifyContent},
-    sizing::{Padding, SizeSpec},
-};
+use heka::{Style, align, color, flow, justify, pad, size};
 
 fn main() -> Result<(), impl std::error::Error> {
     let mut dal = DAL::new(
@@ -23,13 +18,14 @@ fn main() -> Result<(), impl std::error::Error> {
     let panel = dal.new_panel(
         None,
         Style {
-            flow: Direction::Column,
+            flow: flow!(column),
             gap: 2,
-            padding: Padding::all(20),
-            width: SizeSpec::Fill,
-            height: SizeSpec::Fill,
-            justify_content: JustifyContent::Center,
-            align_items: AlignItems::Center,
+            padding: pad!(20),
+            width: size!(fill),
+            height: size!(fill),
+            justify_content: justify!(center),
+            align_items: align!(center),
+            background_color: color!(white),
             ..Default::default()
         },
     );
@@ -38,7 +34,7 @@ fn main() -> Result<(), impl std::error::Error> {
         "Count = 0",
         Some(panel),
         Some(TextStyle {
-            color: Color::risd_blue,
+            color: color!(risd_blue),
             font_size: 32.0,
             font_family: FamilyOwned::Name("Fantasque Sans Mono".into()),
             ..Default::default()
