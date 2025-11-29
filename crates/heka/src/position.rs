@@ -23,3 +23,22 @@ pub enum LayoutStrategy {
     // A later focus
     Grid,
 }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum JustifyContent {
+    #[default]
+    Start,
+    Center,
+    End,
+    SpaceBetween,
+    SpaceAround,
+    SpaceEvenly,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum AlignItems {
+    #[default]
+    Start,
+    Center,
+    End,
+}

@@ -5,7 +5,7 @@ use std::collections::{HashSet, VecDeque};
 use crate::{
     boxalloc::Allocator,
     color::Color,
-    position::{Direction, LayoutStrategy, Position},
+    position::{AlignItems, Direction, JustifyContent, LayoutStrategy, Position},
     sizing::{Border, Margin, Padding, SizeSpec},
 };
 
@@ -175,6 +175,11 @@ pub struct Style {
     /// Position relative to the parent element
     pub position: Position,
 
+    /// The distribution of children along the **main axis**.
+    pub justify_content: JustifyContent,
+    /// The alignment of children along the **cross axis**.
+    pub align_items: AlignItems,
+
     /// The intrinsic content width, as measured by a component.
     /// This is used by `SizeSpec::Fit`.
     pub intrinsic_width: Option<u32>,
@@ -201,6 +206,10 @@ impl Default for Style {
             layout: LayoutStrategy::default(),
             flow: Direction::default(),
             position: Position::default(),
+
+            justify_content: JustifyContent::default(),
+            align_items: AlignItems::default(),
+
             gap: 0,
             z_index: 0,
 
@@ -658,7 +667,7 @@ impl Root {
             }
         }
 
-        // 7 - Calculate Space for 'Fill' Children
+        // 6 - Calculate Space for 'Fill' Children
         let total_gap_w = if style.flow == Direction::Row && !in_flow_children.is_empty() {
             style.gap * (in_flow_children.len() as u32 - 1)
         } else {
@@ -705,9 +714,64 @@ impl Root {
             }
         }
 
+        let (mut main_axis_offset, mut extra_gap) = (0.0, 0.0);
+        let child_count = in_flow_children.len() as f32;
+
+        if style.flow == Direction::Row && remaining_w > 0.0 && total_grow_factor_w == 0.0 {
+            match style.justify_content {
+                JustifyContent::Start => {}
+                JustifyContent::Center => main_axis_offset = remaining_w / 2.0,
+                JustifyContent::End => main_axis_offset = remaining_w,
+                JustifyContent::SpaceBetween => {
+                    if child_count > 1.0 {
+                        extra_gap = remaining_w / (child_count - 1.0);
+                    }
+                }
+                JustifyContent::SpaceAround => {
+                    extra_gap = remaining_w / child_count;
+                    main_axis_offset = extra_gap / 2.0;
+                }
+                JustifyContent::SpaceEvenly => {
+                    extra_gap = remaining_w / (child_count + 1.0);
+                    main_axis_offset = extra_gap;
+                }
+            }
+        } else if style.flow == Direction::Column && remaining_h > 0.0 && total_grow_factor_h == 0.0
+        {
+            match style.justify_content {
+                JustifyContent::Start => {}
+                JustifyContent::Center => main_axis_offset = remaining_h / 2.0,
+                JustifyContent::End => main_axis_offset = remaining_h,
+                JustifyContent::SpaceBetween => {
+                    if child_count > 1.0 {
+                        extra_gap = remaining_h / (child_count - 1.0);
+                    }
+                }
+                JustifyContent::SpaceAround => {
+                    extra_gap = remaining_h / child_count;
+                    main_axis_offset = extra_gap / 2.0;
+                }
+                JustifyContent::SpaceEvenly => {
+                    extra_gap = remaining_h / (child_count + 1.0);
+                    main_axis_offset = extra_gap;
+                }
+            }
+        }
+
+        let mut current_x = content_x
+            + if style.flow == Direction::Row {
+                main_axis_offset as i32
+            } else {
+                0
+            };
+        let mut current_y = content_y
+            + if style.flow == Direction::Column {
+                main_axis_offset as i32
+            } else {
+                0
+            };
+
         // 7 - Recurse and Arrange All Children
-        let mut current_x = content_x;
-        let mut current_y = content_y;
         let children_to_layout = capsule.children.clone();
 
         for child_ref in &children_to_layout {
@@ -742,45 +806,96 @@ impl Root {
                     let base_h = child_desired_h as f32;
 
                     let m_left = child_style.margin.left as i32;
-                    let m_right = child_style.margin.right as i32;
                     let m_top = child_style.margin.top as i32;
-                    let m_bottom = child_style.margin.bottom as i32;
 
                     match style.layout {
                         LayoutStrategy::Flex => match style.flow {
                             Direction::Row => {
-                                child_given_x = current_x + m_left;
-                                child_given_y = current_y + m_top; // Align top with margin
-
                                 let final_child_w = if remaining_w > 0.0 {
-                                    base_w + (child_style.flex_grow * grow_per_factor_w) // Grow
+                                    base_w + (child_style.flex_grow * grow_per_factor_w)
                                 } else if remaining_w < 0.0 {
-                                    let weighted_shrink = child_style.flex_shrink * base_w; // Shrink
+                                    let weighted_shrink = child_style.flex_shrink * base_w;
                                     base_w - (weighted_shrink * shrink_ratio_w)
                                 } else {
-                                    base_w // Fits perfectly
+                                    base_w
                                 };
+
+                                // Determine Height
+                                // Needed for AlignItems
+                                let final_child_h = match child_style.height {
+                                    SizeSpec::Percent(_) => content_h.saturating_sub(
+                                        (m_top + child_style.margin.bottom as i32) as u32,
+                                    ),
+                                    // If fit/auto, use the desired height from Pass 1
+                                    _ => child_desired_h,
+                                };
+
+                                let align_offset = match style.align_items {
+                                    AlignItems::Start => 0,
+                                    AlignItems::End => {
+                                        // Parent Height - Child Height - Margins
+                                        (content_h as i32)
+                                            - (final_child_h as i32)
+                                            - m_top
+                                            - (child_style.margin.bottom as i32)
+                                    }
+                                    AlignItems::Center => {
+                                        // (Parent Height - Child Total Height) / 2
+                                        let child_total_h = (final_child_h as i32)
+                                            + m_top
+                                            + (child_style.margin.bottom as i32);
+                                        ((content_h as i32) - child_total_h) / 2
+                                    }
+                                };
+
+                                child_given_x = current_x + m_left;
+                                // Apply Alignment Offset to Y
+                                child_given_y = current_y + m_top + align_offset;
 
                                 child_given_w = match child_style.width {
                                     SizeSpec::Percent(_) => content_w,
                                     _ => final_child_w as u32,
                                 };
-                                child_given_h = content_h.saturating_sub((m_top + m_bottom) as u32); // Flex row items fill height minus margin
+                                child_given_h = final_child_h;
                             }
                             Direction::Column => {
-                                child_given_x = current_x + m_left; // Align left with margin
-                                child_given_y = current_y + m_top;
-                                child_given_w = content_w.saturating_sub((m_left + m_right) as u32); // Flex col items fill width minus margin
-
                                 let final_child_h = if remaining_h > 0.0 {
-                                    base_h + (child_style.flex_grow * grow_per_factor_h) // Grow
+                                    base_h + (child_style.flex_grow * grow_per_factor_h)
                                 } else if remaining_h < 0.0 {
-                                    let weighted_shrink = child_style.flex_shrink * base_h; // Shrink
+                                    let weighted_shrink = child_style.flex_shrink * base_h;
                                     base_h - (weighted_shrink * shrink_ratio_h)
                                 } else {
-                                    base_h // Fits perfectly
+                                    base_h
                                 };
 
+                                // Determine Width
+                                let final_child_w = match child_style.width {
+                                    SizeSpec::Percent(_) => content_w.saturating_sub(
+                                        (m_left + child_style.margin.right as i32) as u32,
+                                    ),
+                                    _ => child_desired_w,
+                                };
+
+                                let align_offset = match style.align_items {
+                                    AlignItems::Start => 0,
+                                    AlignItems::End => {
+                                        (content_w as i32)
+                                            - (final_child_w as i32)
+                                            - m_left
+                                            - (child_style.margin.right as i32)
+                                    }
+                                    AlignItems::Center => {
+                                        let child_total_w = (final_child_w as i32)
+                                            + m_left
+                                            + (child_style.margin.right as i32);
+                                        ((content_w as i32) - child_total_w) / 2
+                                    }
+                                };
+
+                                child_given_x = current_x + m_left + align_offset;
+                                child_given_y = current_y + m_top;
+
+                                child_given_w = final_child_w;
                                 child_given_h = match child_style.height {
                                     SizeSpec::Percent(_) => content_h,
                                     _ => final_child_h as u32,
@@ -821,18 +936,28 @@ impl Root {
                     // Update cursor for next in-flow item
                     match style.layout {
                         LayoutStrategy::Flex => {
+                            // NOTE: We need the sizes from the SPACE, because the child
+                            // might have updated them in the recursive call (e.g. if it was Auto/Fit)
                             let (child_final_w, child_final_h) = {
-                                (
-                                    child_space_mut.width.unwrap(),
-                                    child_space_mut.height.unwrap(),
-                                )
+                                let s = self.spaces[child_capsule.space_ref].as_ref().unwrap();
+                                (s.width.unwrap(), s.height.unwrap())
                             };
+
                             match style.flow {
                                 Direction::Row => {
-                                    current_x += child_final_w as i32 + style.gap as i32
+                                    // Add standard gap + JustifyContent extra gap
+                                    current_x += child_final_w as i32
+                                        + child_style.margin.left as i32
+                                        + child_style.margin.right as i32
+                                        + style.gap as i32
+                                        + extra_gap as i32;
                                 }
                                 Direction::Column => {
-                                    current_y += child_final_h as i32 + style.gap as i32
+                                    current_y += child_final_h as i32
+                                        + child_style.margin.top as i32
+                                        + child_style.margin.bottom as i32
+                                        + style.gap as i32
+                                        + extra_gap as i32;
                                 }
                             }
                         }
