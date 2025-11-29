@@ -3,7 +3,7 @@ use deka::{DAL, TextStyle, WindowAttr};
 use heka::{
     Style,
     color::Color,
-    position::Direction,
+    position::{AlignItems, Direction, JustifyContent},
     sizing::{Padding, SizeSpec},
 };
 
@@ -28,6 +28,8 @@ fn main() -> Result<(), impl std::error::Error> {
             padding: Padding::all(20),
             width: SizeSpec::Fill,
             height: SizeSpec::Fill,
+            justify_content: JustifyContent::Center,
+            align_items: AlignItems::Center,
             ..Default::default()
         },
     );
@@ -57,5 +59,6 @@ fn main() -> Result<(), impl std::error::Error> {
         }),
     );
 
+    dal.debug();
     dal.run()
 }
