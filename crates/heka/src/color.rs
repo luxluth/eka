@@ -51,6 +51,14 @@ impl Color {
         a: 255,
     };
 
+    /// Transparent color
+    pub const transparent: Color = Color {
+        r: 0,
+        g: 0,
+        b: 0,
+        a: 0,
+    };
+
     /// DodgerBlue - a nice color
     pub const dodger_blue: Color = Color {
         r: 30,
@@ -152,7 +160,7 @@ const fn hue_to_rgb(p: f32, q: f32, mut t: f32) -> f32 {
 
 impl Default for Color {
     fn default() -> Self {
-        Color::Hex(0xFFFFFFFF)
+        Color::transparent
     }
 }
 
