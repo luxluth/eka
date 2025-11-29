@@ -17,7 +17,7 @@ use vulkano::{
     instance::{Instance, InstanceCreateFlags, InstanceCreateInfo},
     memory::allocator::{AllocationCreateInfo, StandardMemoryAllocator},
     pipeline::{
-        DynamicState, GraphicsPipeline, PipelineLayout, PipelineShaderStageCreateInfo,
+        DynamicState, GraphicsPipeline, Pipeline, PipelineLayout, PipelineShaderStageCreateInfo,
         graphics::{
             GraphicsPipelineCreateInfo,
             color_blend::{ColorBlendAttachmentState, ColorBlendState},
@@ -300,13 +300,13 @@ impl ApplicationHandler for Application {
                 PipelineShaderStageCreateInfo::new(fs),
             ];
 
-            let layout = PipelineLayout::new(
-                self.device.clone(),
+            let pipeline_layout_create_info =
                 PipelineDescriptorSetLayoutCreateInfo::from_stages(&stages)
                     .into_pipeline_layout_create_info(self.device.clone())
-                    .unwrap(),
-            )
-            .unwrap();
+                    .unwrap();
+
+            let layout =
+                PipelineLayout::new(self.device.clone(), pipeline_layout_create_info).unwrap();
 
             let subpass = Subpass::from(render_pass.clone(), 0).unwrap();
 
@@ -485,11 +485,18 @@ impl ApplicationHandler for Application {
                     .set_scissor(0, [scissor].into_iter().collect())
                     .unwrap()
                     .bind_pipeline_graphics(rcx.pipeline.clone())
+                    .unwrap()
+                    .push_constants(
+                        rcx.pipeline.layout().clone(),
+                        0,
+                        shaders::rectvs::PushConstants {
+                            screen_size: [window_size.width as f32, window_size.height as f32],
+                        },
+                    )
                     .unwrap();
 
                 self.dal.compute_layout();
                 let commands = self.dal.render();
-                let size = [window_size.width as f32, window_size.height as f32];
 
                 if commands.is_empty() {
                     debug!("Frame {}: No draw commands generated!", image_index);
@@ -498,7 +505,6 @@ impl ApplicationHandler for Application {
                 self.gui_renderer.upload_draw_commands(
                     image_index as usize,
                     &commands,
-                    size,
                     &mut self.dal,
                 );
                 self.gui_renderer.render(image_index as usize, &mut builder);

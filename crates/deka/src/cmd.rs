@@ -29,25 +29,11 @@ pub enum DrawCommand {
 }
 
 impl DrawCommand {
-    pub fn rect_vertices(
-        screen_size: [f32; 2],
-        z_index: u32,
-        space: &Space,
-        color: &Color,
-    ) -> [TVertex; 6] {
+    pub fn rect_vertices(z_index: u32, space: &Space, color: &Color) -> [TVertex; 6] {
         let w = space.width.unwrap_or(0) as f32;
         let h = space.height.unwrap_or(0) as f32;
         let x = space.x as f32;
         let y = space.y as f32;
-
-        let screen_w = screen_size[0];
-        let screen_h = screen_size[1];
-
-        // Normalize coordinates from pixel space to NDC space [-1.0, 1.0]
-        let nx = (x / screen_w) * 2.0 - 1.0;
-        let ny = (y / screen_h) * 2.0 - 1.0;
-        let nw = (w / screen_w) * 2.0;
-        let nh = (h / screen_h) * 2.0;
 
         // NOTE: Vulkan depth range is usually [0.0, 1.0].
         // pipeline uses CompareOp::LessOrEqual:
@@ -58,43 +44,55 @@ impl DrawCommand {
         let z = (1.0 - (z_index as f32 * 0.0001)).max(0.0);
 
         let color_arr: [f32; 4] = (*color).into();
+
+        let uv_tl = [0.0, 0.0];
+        let uv_bl = [0.0, 1.0];
+        let uv_tr = [1.0, 0.0];
+        let uv_br = [1.0, 1.0];
+
         [
             // Triangle 1 (Top-Left, Bottom-Left, Top-Right)
             TVertex {
-                position: [nx, ny, z], // Top-Left
+                position: [x, y, z], // Top-Left
                 color: color_arr,
+                uv: uv_tl,
             },
             TVertex {
-                position: [nx, ny + nh, z], // Bottom-Left
+                position: [x, y + h, z], // Bottom-Left
                 color: color_arr,
+                uv: uv_bl,
             },
             TVertex {
-                position: [nx + nw, ny, z], // Top-Right
+                position: [x + w, y, z], // Top-Right
                 color: color_arr,
+                uv: uv_tr,
             },
             // Triangle 2 (Top-Right, Bottom-Left, Bottom-Right)
             TVertex {
-                position: [nx + nw, ny, z], // Top-Right
+                position: [x + w, y, z], // Top-Right
                 color: color_arr,
+                uv: uv_tr,
             },
             TVertex {
-                position: [nx, ny + nh, z], // Bottom-Left
+                position: [x, y + h, z], // Bottom-Left
                 color: color_arr,
+                uv: uv_bl,
             },
             TVertex {
-                position: [nx + nw, ny + nh, z], // Bottom-Right
+                position: [x + w, y + h, z], // Bottom-Right
                 color: color_arr,
+                uv: uv_br,
             },
         ]
     }
 
-    pub fn to_vertices(&self, screen_size: [f32; 2], dal: &mut DAL) -> Vec<TVertex> {
+    pub fn to_vertices(&self, dal: &mut DAL) -> Vec<TVertex> {
         match self {
             DrawCommand::Rect {
                 space,
                 color,
                 z_index,
-            } => Self::rect_vertices(screen_size, *z_index, space, color).to_vec(),
+            } => Self::rect_vertices(*z_index, space, color).to_vec(),
             DrawCommand::Text {
                 buffer_ref,
                 space,
@@ -130,7 +128,6 @@ impl DrawCommand {
                         // let final_y = y + (center_offset_y as i32);
 
                         vertices.extend(Self::rect_vertices(
-                            screen_size,
                             *z_index,
                             &Space {
                                 x: x + space.x,
@@ -164,7 +161,6 @@ impl DrawCommand {
 
                 let mut push_side = |sx: i32, sy: i32, sw: u32, sh: u32| {
                     vertices.extend(Self::rect_vertices(
-                        screen_size,
                         *z_index,
                         &Space {
                             x: sx,

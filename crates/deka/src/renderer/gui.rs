@@ -17,6 +17,8 @@ pub mod utils {
         pub position: [f32; 3], // x, y, z
         #[format(R32G32B32A32_SFLOAT)]
         pub color: [f32; 4],
+        #[format(R32G32_SFLOAT)]
+        pub uv: [f32; 2],
     }
 }
 
@@ -51,12 +53,11 @@ impl GuiRenderer {
         &mut self,
         image_index: usize,
         draw_commands: &[DrawCommand],
-        screen_size: [f32; 2],
         dal: &mut DAL,
     ) {
         let vertices: Vec<utils::TVertex> = draw_commands
             .iter()
-            .flat_map(|cmd| cmd.to_vertices(screen_size, dal))
+            .flat_map(|cmd| cmd.to_vertices(dal))
             .collect();
 
         let vertex_count = vertices.len();
