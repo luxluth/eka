@@ -12,16 +12,14 @@ use vulkano::{
         Device, DeviceCreateInfo, DeviceExtensions, Queue, QueueCreateInfo, QueueFlags,
         physical::PhysicalDeviceType,
     },
-    format::Format,
-    image::{Image, ImageCreateInfo, ImageType, ImageUsage, view::ImageView},
+    image::{Image, ImageUsage, view::ImageView},
     instance::{Instance, InstanceCreateFlags, InstanceCreateInfo},
-    memory::allocator::{AllocationCreateInfo, StandardMemoryAllocator},
+    memory::allocator::StandardMemoryAllocator,
     pipeline::{
         DynamicState, GraphicsPipeline, Pipeline, PipelineLayout, PipelineShaderStageCreateInfo,
         graphics::{
             GraphicsPipelineCreateInfo,
             color_blend::{ColorBlendAttachmentState, ColorBlendState},
-            depth_stencil::{CompareOp, DepthState, DepthStencilState},
             input_assembly::InputAssemblyState,
             multisample::MultisampleState,
             rasterization::{CullMode, RasterizationState},
@@ -75,32 +73,16 @@ struct RenderContext {
 fn window_size_dependent_setup(
     images: &[Arc<Image>],
     render_pass: &Arc<RenderPass>,
-    memory_allocator: &Arc<StandardMemoryAllocator>,
 ) -> Vec<Arc<Framebuffer>> {
     images
         .iter()
         .map(|image| {
             let view = ImageView::new_default(image.clone()).unwrap();
 
-            let depth_buffer = Image::new(
-                memory_allocator.clone(),
-                ImageCreateInfo {
-                    image_type: ImageType::Dim2d,
-                    format: Format::D16_UNORM, // Must match RenderPass
-                    extent: image.extent(),
-                    usage: ImageUsage::DEPTH_STENCIL_ATTACHMENT | ImageUsage::TRANSIENT_ATTACHMENT,
-                    ..Default::default()
-                },
-                AllocationCreateInfo::default(),
-            )
-            .unwrap();
-
-            let depth_view = ImageView::new_default(depth_buffer).unwrap();
-
             Framebuffer::new(
                 render_pass.clone(),
                 FramebufferCreateInfo {
-                    attachments: vec![view, depth_view],
+                    attachments: vec![view],
                     ..Default::default()
                 },
             )
@@ -285,24 +267,16 @@ impl ApplicationHandler for Application {
                     samples: 1,
                     load_op: Clear,
                     store_op: Store,
-                },
-                depth_stencil: {
-                    format: Format::D16_UNORM, // Standard depth format
-                    samples: 1,
-                    load_op: Clear,
-                    store_op: DontCare,
                 }
             },
-
             pass: {
                 color: [color],
-                depth_stencil: {depth_stencil},
+                depth_stencil: {},
             }
         )
         .unwrap();
 
-        let framebuffers =
-            window_size_dependent_setup(&images, &render_pass, &self.gui_renderer.memory_allocator);
+        let framebuffers = window_size_dependent_setup(&images, &render_pass);
 
         let pipeline = {
             let vs = shaders::rectvs::load(self.device.clone())
@@ -358,13 +332,6 @@ impl ApplicationHandler for Application {
                         .into_iter()
                         .collect(),
                     subpass: Some(subpass.into()),
-                    depth_stencil_state: Some(DepthStencilState {
-                        depth: Some(DepthState {
-                            compare_op: CompareOp::LessOrEqual, // Closer things overwrite further things
-                            write_enable: true,
-                        }),
-                        ..Default::default()
-                    }),
                     ..GraphicsPipelineCreateInfo::layout(layout)
                 },
             )
@@ -439,11 +406,7 @@ impl ApplicationHandler for Application {
                         .expect("failed to recreate swapchain");
 
                     rcx.swapchain = new_swapchain;
-                    rcx.framebuffers = window_size_dependent_setup(
-                        &new_images,
-                        &rcx.render_pass,
-                        &self.gui_renderer.memory_allocator,
-                    );
+                    rcx.framebuffers = window_size_dependent_setup(&new_images, &rcx.render_pass);
                     rcx.viewport.extent = window_size.into();
                     rcx.recreate_swapchain = false;
                     self.gui_renderer.resize(new_images.len());
@@ -490,7 +453,6 @@ impl ApplicationHandler for Application {
                         RenderPassBeginInfo {
                             clear_values: vec![
                                 Some([0., 0., 0., 0.0].into()), // Color
-                                Some(1.0f32.into()),            // Depth
                             ],
                             ..RenderPassBeginInfo::framebuffer(
                                 rcx.framebuffers[image_index as usize].clone(),

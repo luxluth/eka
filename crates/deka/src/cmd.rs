@@ -27,7 +27,6 @@ pub enum DrawCommand {
 
 impl DrawCommand {
     pub fn rect_vertices(
-        z_index: u32,
         space: &Space,
         color: &Color,
         radius: u32,
@@ -37,14 +36,6 @@ impl DrawCommand {
         let h = space.height.unwrap_or(0) as f32;
         let x = space.x as f32;
         let y = space.y as f32;
-
-        // NOTE: Vulkan depth range is usually [0.0, 1.0].
-        // pipeline uses CompareOp::LessOrEqual:
-        // 0.0 is NEAR (Top), 1.0 is FAR (Bottom).
-        // We map z_index (0, 1, 2...) to (1.0, 0.99, 0.98...).
-        // Higher z_index = Smaller Z value = Closer to camera.
-        // We use a small step (0.0001) to allow for many layers.
-        let z = (1.0 - (z_index as f32 * 0.0001)).max(0.0);
 
         let color_arr: [f32; 4] = (*color).into();
 
@@ -60,7 +51,7 @@ impl DrawCommand {
         [
             // Triangle 1 (Top-Left, Bottom-Left, Top-Right)
             TVertex {
-                position: [x, y, z], // Top-Left
+                position: [x, y], // Top-Left
                 color: color_arr,
                 uv: uv_tl,
                 size,
@@ -68,7 +59,7 @@ impl DrawCommand {
                 stroke_width: s,
             },
             TVertex {
-                position: [x, y + h, z], // Bottom-Left
+                position: [x, y + h], // Bottom-Left
                 color: color_arr,
                 uv: uv_bl,
                 size,
@@ -76,7 +67,7 @@ impl DrawCommand {
                 stroke_width: s,
             },
             TVertex {
-                position: [x + w, y, z], // Top-Right
+                position: [x + w, y], // Top-Right
                 color: color_arr,
                 uv: uv_tr,
                 size,
@@ -85,7 +76,7 @@ impl DrawCommand {
             },
             // Triangle 2 (Top-Right, Bottom-Left, Bottom-Right)
             TVertex {
-                position: [x + w, y, z], // Top-Right
+                position: [x + w, y], // Top-Right
                 color: color_arr,
                 uv: uv_tr,
                 size,
@@ -93,7 +84,7 @@ impl DrawCommand {
                 stroke_width: s,
             },
             TVertex {
-                position: [x, y + h, z], // Bottom-Left
+                position: [x, y + h], // Bottom-Left
                 color: color_arr,
                 uv: uv_bl,
                 size,
@@ -101,7 +92,7 @@ impl DrawCommand {
                 stroke_width: s,
             },
             TVertex {
-                position: [x + w, y + h, z], // Bottom-Right
+                position: [x + w, y + h], // Bottom-Right
                 color: color_arr,
                 uv: uv_br,
                 size,
@@ -117,7 +108,7 @@ impl DrawCommand {
                 space,
                 fill_color,
                 stroke_color,
-                z_index,
+                z_index: _,
                 border_radius,
                 stroke_width,
             } => {
@@ -126,7 +117,6 @@ impl DrawCommand {
                 // Draw Fill (if visible)
                 if fill_color.a > 0 {
                     vertices.extend(Self::rect_vertices(
-                        *z_index,
                         space,
                         fill_color,
                         *border_radius,
@@ -137,7 +127,6 @@ impl DrawCommand {
                 // Draw Stroke (if visible and has width)
                 if stroke_color.a > 0 && *stroke_width > 0 {
                     vertices.extend(Self::rect_vertices(
-                        *z_index,
                         space,
                         stroke_color,
                         *border_radius,
@@ -151,7 +140,7 @@ impl DrawCommand {
                 buffer_ref,
                 space,
                 style,
-                z_index,
+                z_index: _,
             } => {
                 let Some(buffer) = dal.get_buffer::<Buffer>(*buffer_ref) else {
                     return vec![];
@@ -170,7 +159,6 @@ impl DrawCommand {
                         }
 
                         vertices.extend(Self::rect_vertices(
-                            *z_index,
                             &Space {
                                 x: x + space.x,
                                 y: y + space.y,

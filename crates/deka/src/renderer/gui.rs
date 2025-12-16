@@ -13,8 +13,8 @@ pub mod utils {
     #[derive(BufferContents, Vertex, Debug, Clone, Copy)]
     #[repr(C)]
     pub struct TVertex {
-        #[format(R32G32B32_SFLOAT)]
-        pub position: [f32; 3], // x, y, z
+        #[format(R32G32_SFLOAT)]
+        pub position: [f32; 2], // x, y
         #[format(R32G32B32A32_SFLOAT)]
         pub color: [f32; 4],
         #[format(R32G32_SFLOAT)]

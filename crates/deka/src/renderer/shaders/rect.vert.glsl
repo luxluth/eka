@@ -21,7 +21,7 @@ void main() {
     float x = (position.x / pc.screen_size.x) * 2.0 - 1.0;
     float y = (position.y / pc.screen_size.y) * 2.0 - 1.0;
 
-    gl_Position = vec4(x, y, position.z, 1.0);
+    gl_Position = vec4(x, y, 0.0, 1.0);
     v_color = color;
     v_uv = uv;
     v_size = size;
