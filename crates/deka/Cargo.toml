@@ -14,9 +14,6 @@ cosmic-text = { workspace = true }
 vulkano-util = { workspace = true }
 vulkano = { workspace = true }
 vulkano-shaders = { workspace = true }
-smithay-client-toolkit = { workspace = true }
-raw-window-handle = { workspace = true }
-wayland-client = { workspace = true }
 
 [features]
 default = ["debug"]

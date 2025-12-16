@@ -32,7 +32,8 @@ use vulkano::{
     },
     render_pass::{Framebuffer, FramebufferCreateInfo, RenderPass, Subpass},
     swapchain::{
-        Surface, Swapchain, SwapchainCreateInfo, SwapchainPresentInfo, acquire_next_image,
+        CompositeAlpha, Surface, Swapchain, SwapchainCreateInfo, SwapchainPresentInfo,
+        acquire_next_image,
     },
     sync::{self, GpuFuture, future::FenceSignalFuture},
 };
@@ -208,23 +209,23 @@ impl Application {
 
 impl ApplicationHandler for Application {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
-        let window = Arc::new(
-            event_loop
-                .create_window(
-                    Window::default_attributes()
-                        .with_resizable(self.dal.attr.resizable)
-                        .with_title(&self.dal.attr.title)
-                        .with_inner_size(PhysicalSize::new(
-                            self.dal.attr.size.0,
-                            self.dal.attr.size.1,
-                        ))
-                        .with_decorations(false)
-                        .with_transparent(true),
-                )
-                .unwrap(),
-        );
+        let mut window_attrs = Window::default_attributes()
+            .with_resizable(self.dal.attr.resizable)
+            .with_title(&self.dal.attr.title)
+            .with_inner_size(PhysicalSize::new(
+                self.dal.attr.size.0,
+                self.dal.attr.size.1,
+            ))
+            .with_decorations(false)
+            .with_transparent(true);
 
-        window.set_transparent(true);
+        #[cfg(target_os = "linux")]
+        {
+            use winit::platform::wayland::WindowAttributesExtWayland;
+            window_attrs = window_attrs.with_name(self.dal.attr.app_id.clone(), "");
+        }
+
+        let window = Arc::new(event_loop.create_window(window_attrs).unwrap());
 
         let surface = Surface::from_window(self.instance.clone(), window.clone()).unwrap();
         let window_size = window.inner_size();
@@ -241,6 +242,24 @@ impl ApplicationHandler for Application {
                 .surface_formats(&surface, Default::default())
                 .unwrap()[0];
 
+            let composite_alpha = surface_capabilities
+                .supported_composite_alpha
+                .into_iter()
+                .find(|c| *c == CompositeAlpha::PreMultiplied)
+                .or_else(|| {
+                    surface_capabilities
+                        .supported_composite_alpha
+                        .into_iter()
+                        .find(|c| *c == CompositeAlpha::PostMultiplied)
+                })
+                .or_else(|| {
+                    surface_capabilities
+                        .supported_composite_alpha
+                        .into_iter()
+                        .find(|c| *c == CompositeAlpha::Inherit)
+                })
+                .unwrap_or(CompositeAlpha::Opaque);
+
             Swapchain::new(
                 self.device.clone(),
                 surface.clone(),
@@ -249,11 +268,7 @@ impl ApplicationHandler for Application {
                     image_format,
                     image_extent: window_size.into(),
                     image_usage: ImageUsage::COLOR_ATTACHMENT,
-                    composite_alpha: surface_capabilities
-                        .supported_composite_alpha
-                        .into_iter()
-                        .next()
-                        .unwrap(),
+                    composite_alpha,
                     ..Default::default()
                 },
             )
