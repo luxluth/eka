@@ -22,7 +22,6 @@ use events::*;
 use heka::{layout, size, style};
 
 mod al;
-mod alv2;
 mod cmd;
 pub mod elements;
 pub mod renderer;
