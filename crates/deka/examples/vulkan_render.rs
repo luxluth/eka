@@ -1,13 +1,13 @@
 use cosmic_text::FamilyOwned;
 use deka::{DAL, TextStyle, WindowAttr};
-use heka::{Style, align, color, flow, justify, pad, size};
+use heka::{Style, align, border, color, flow, justify, pad, size};
 
 fn main() -> Result<(), impl std::error::Error> {
     let mut dal = DAL::new(
         1000,
         700,
         WindowAttr {
-            resizable: true,
+            resizable: false,
             title: "Hello from Deka!".into(),
             ..WindowAttr::default()
         },
@@ -25,6 +25,7 @@ fn main() -> Result<(), impl std::error::Error> {
             height: size!(fill),
             justify_content: justify!(center),
             align_items: align!(center),
+            border: border!(2, 30, color!(red)),
             background_color: color!(white),
             ..Default::default()
         },

@@ -6,7 +6,7 @@ authors.workspace = true
 description = "eka core gui abstraction"
 
 [dependencies]
-heka = { path = "../heka/" }
+heka = { path = "../heka" }
 winit = { workspace = true }
 env_logger = { workspace = true }
 log = { workspace = true }
@@ -14,6 +14,9 @@ cosmic-text = { workspace = true }
 vulkano-util = { workspace = true }
 vulkano = { workspace = true }
 vulkano-shaders = { workspace = true }
+smithay-client-toolkit = { workspace = true }
+raw-window-handle = { workspace = true }
+wayland-client = { workspace = true }
 
 [features]
 default = ["debug"]

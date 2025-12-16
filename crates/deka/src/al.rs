@@ -1,7 +1,7 @@
-use crate::renderer::{gui::utils::TVertex, shaders};
+//! Application Layer
 
-use super::{DAL, renderer::gui::GuiRenderer};
 use std::sync::Arc;
+
 use vulkano::{
     Validated, VulkanError, VulkanLibrary,
     command_buffer::{
@@ -36,6 +36,7 @@ use vulkano::{
     },
     sync::{self, GpuFuture, future::FenceSignalFuture},
 };
+
 use winit::{
     application::ApplicationHandler,
     dpi::PhysicalSize,
@@ -45,6 +46,9 @@ use winit::{
 };
 
 use log::{debug, warn};
+
+use super::{DAL, renderer::gui::GuiRenderer};
+use crate::renderer::{gui::utils::TVertex, shaders};
 
 pub struct Application {
     instance: Arc<Instance>,
@@ -214,11 +218,13 @@ impl ApplicationHandler for Application {
                             self.dal.attr.size.0,
                             self.dal.attr.size.1,
                         ))
-                        .with_transparent(true)
-                        .with_decorations(false),
+                        .with_decorations(false)
+                        .with_transparent(true),
                 )
                 .unwrap(),
         );
+
+        window.set_transparent(true);
 
         let surface = Surface::from_window(self.instance.clone(), window.clone()).unwrap();
         let window_size = window.inner_size();

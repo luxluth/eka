@@ -9,7 +9,6 @@ use heka::color;
 use heka::justify;
 use heka::margin;
 use heka::pad;
-use heka::rgb;
 use log::warn;
 pub use text_style::AsCosmicColor;
 pub use text_style::TextStyle;
@@ -22,7 +21,8 @@ use cosmic_text::{FontSystem, SwashCache};
 use events::*;
 use heka::{layout, size, style};
 
-mod app;
+mod al;
+mod alv2;
 mod cmd;
 pub mod elements;
 pub mod renderer;
@@ -118,6 +118,7 @@ pub struct WindowAttr {
     pub resizable: bool,
     pub title: String,
     pub size: (u32, u32),
+    pub app_id: String,
 }
 
 impl Default for WindowAttr {
@@ -126,6 +127,7 @@ impl Default for WindowAttr {
             resizable: false,
             title: String::from("heka, deka, heka, eve"),
             size: (800, 600),
+            app_id: String::from("org.deka.app"),
         }
     }
 }
@@ -269,10 +271,10 @@ impl DAL {
             height: size!(fit),
             padding: pad!(4, 2),
             margin: margin!(0, 4),
-            border: border!(1, 5, color!(black)),
+            border: border!(1, 5, color!(0x8f8f9dFF)),
             justify_content: justify!(center),
             align_items: align!(center),
-            background_color: rgb!(200, 200, 200),
+            background_color: color!(0xe9e9edFF),
             layout: layout!(flex),
         });
 
@@ -301,7 +303,7 @@ impl DAL {
         let _ = env_logger::try_init();
 
         let event_loop = EventLoop::new().unwrap();
-        let mut application = app::Application::new(&event_loop, self);
+        let mut application = al::Application::new(&event_loop, self);
 
         event_loop.run_app(&mut application)
     }
