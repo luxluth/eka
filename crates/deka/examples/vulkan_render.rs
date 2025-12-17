@@ -1,6 +1,6 @@
 use cosmic_text::FamilyOwned;
 use deka::{DAL, TextStyle, WindowAttr};
-use heka::{Style, align, border, color, flow, justify, pad, size};
+use heka::{Style, align, border, color, flow, justify, pad, size, sizing::Border};
 
 fn main() -> Result<(), impl std::error::Error> {
     let mut dal = DAL::new(
@@ -15,6 +15,16 @@ fn main() -> Result<(), impl std::error::Error> {
 
     let mut count = 0;
 
+    let border_default = if let Ok(desktop) = std::env::var("XDG_CURRENT_DESKTOP") {
+        if desktop.to_lowercase() == "gnome" {
+            border!(0, 15, color!(0xDDDDDDFF))
+        } else {
+            Border::default()
+        }
+    } else {
+        Border::default()
+    };
+
     let panel = dal.new_panel(
         None,
         Style {
@@ -25,7 +35,7 @@ fn main() -> Result<(), impl std::error::Error> {
             height: size!(fill),
             justify_content: justify!(center),
             align_items: align!(center),
-            border: border!(2, 30, color!(red)),
+            border: border_default,
             background_color: color!(white),
             ..Default::default()
         },
