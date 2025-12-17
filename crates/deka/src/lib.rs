@@ -4,11 +4,11 @@ pub use heka;
 use heka::Frame;
 use heka::Style;
 use heka::align;
-use heka::border;
 use heka::color;
 use heka::justify;
 use heka::margin;
 use heka::pad;
+use log::debug;
 use log::warn;
 pub use text_style::AsCosmicColor;
 pub use text_style::TextStyle;
@@ -123,7 +123,7 @@ pub struct WindowAttr {
 impl Default for WindowAttr {
     fn default() -> Self {
         Self {
-            resizable: false,
+            resizable: true,
             title: String::from("heka, deka, heka, eve"),
             size: (800, 600),
             app_id: String::from("org.deka.app"),
@@ -142,7 +142,7 @@ impl DAL {
             width: size!(fill),
             height: size!(fill),
             layout: layout!(no_layout),
-            background_color: color!(transparent),
+            background_color: color!(red),
         });
 
         let mut elements: HashMap<heka::CapsuleRef, Box<dyn FrameElement>> = HashMap::new();
@@ -193,13 +193,14 @@ impl DAL {
         LabelRef(label_ref)
     }
 
-    pub fn new_panel(&mut self, parent_frame: Option<&heka::Frame>, style: Style) -> PanelRef {
-        let new_frame = if let Some(parent) = parent_frame {
-            self.root.add_frame_child(parent, None)
+    pub fn new_panel(&mut self, parent_frame: Option<impl ElementRef>, style: Style) -> PanelRef {
+        let parent = if let Some(pf) = parent_frame {
+            &Frame::define(pf.raw())
         } else {
-            self.root.add_frame(None)
+            &self.root_frame
         };
 
+        let new_frame = self.root.add_frame_child(parent, None);
         let panel = Panel { frame: new_frame };
 
         new_frame.update_style(&mut self.root, |s| {
@@ -268,9 +269,13 @@ impl DAL {
         style!(button_frame, &mut self.root, {
             width: size!(fit),
             height: size!(fit),
-            padding: pad!(4, 2),
+            padding: pad!(6, 2),
             margin: margin!(0, 4),
-            border: border!(1, 5, color!(0x8f8f9dFF)),
+            border: heka::sizing::Border {
+                size: 2,
+                radius: 5,
+                color: color!(0x8f8f9dFF),
+            },
             justify_content: justify!(center),
             align_items: align!(center),
             background_color: color!(0xe9e9edFF),
@@ -370,6 +375,7 @@ impl DAL {
 
 impl DAL {
     pub fn render(&self) -> Vec<cmd::DrawCommand> {
+        self.debug();
         // Tuple: (Z-Index, Priority, CapsuleRef, Command)
         // Priority: 0 for Rects, 1 for Text. Ensures Text is always ON TOP of Rects for same Z.
         // CapsuleRef: Used as a stable tie-breaker to prevent HashMap-induced flickering.
@@ -393,6 +399,8 @@ impl DAL {
                         z_index: style.z_index,
                         border_radius: style.border.radius,
                         stroke_width: style.border.size,
+                        shadow_color: style.shadow.color,
+                        shadow_blur: style.shadow.blur,
                     },
                 ));
 

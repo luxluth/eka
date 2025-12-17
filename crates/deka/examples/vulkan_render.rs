@@ -1,13 +1,12 @@
 use cosmic_text::FamilyOwned;
-use deka::{DAL, TextStyle, WindowAttr};
-use heka::{Style, align, border, color, flow, justify, pad, size, sizing::Border};
+use deka::{DAL, PanelRef, TextStyle, WindowAttr};
+use heka::{Style, align, border, color, flow, justify, margin, pad, shadow, size, sizing::Border};
 
 fn main() -> Result<(), impl std::error::Error> {
     let mut dal = DAL::new(
         1000,
         700,
         WindowAttr {
-            resizable: false,
             title: "Hello from Deka!".into(),
             ..WindowAttr::default()
         },
@@ -25,8 +24,20 @@ fn main() -> Result<(), impl std::error::Error> {
         Border::default()
     };
 
+    let outer_panel = dal.new_panel(
+        None::<PanelRef>,
+        Style {
+            flow: flow!(column),
+            padding: pad!(20),
+            width: size!(100 %),
+            height: size!(100 %),
+            background_color: color!(red),
+            ..Default::default()
+        },
+    );
+
     let panel = dal.new_panel(
-        None,
+        Some(outer_panel),
         Style {
             flow: flow!(column),
             gap: 2,
@@ -35,6 +46,7 @@ fn main() -> Result<(), impl std::error::Error> {
             height: size!(fill),
             justify_content: justify!(center),
             align_items: align!(center),
+            shadow: shadow!(20., color!(black)),
             border: border_default,
             background_color: color!(white),
             ..Default::default()

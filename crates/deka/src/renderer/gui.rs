@@ -25,6 +25,8 @@ pub mod utils {
         pub radius: f32,
         #[format(R32_SFLOAT)]
         pub stroke_width: f32,
+        #[format(R32_SFLOAT)]
+        pub blur: f32,
     }
 }
 

@@ -318,6 +318,29 @@ macro_rules! border {
        // However, since `color!` expands to `Color::...`, we can try to add a variant for 3 args.
 }
 
+/// Specifies a shadow for an element.
+///
+/// # Examples
+/// ```rust,ignore
+/// shadow!(10.0);                 // 10px blur, default color (Black)
+/// shadow!(10.0, color!(red));    // 10px blur, Red
+/// ```
+#[macro_export]
+macro_rules! shadow {
+    ($blur:expr) => {
+        $crate::color::Shadow {
+            blur: $blur,
+            ..Default::default()
+        }
+    };
+    ($blur:expr, $color:expr) => {
+        $crate::color::Shadow {
+            blur: $blur,
+            color: $color,
+        }
+    };
+}
+
 /// Sets the distribution of children along the **main axis**.
 ///
 /// This macro corresponds to the CSS `justify-content` property. It determines how

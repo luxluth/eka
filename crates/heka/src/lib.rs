@@ -4,7 +4,7 @@ use std::collections::{HashSet, VecDeque};
 
 use crate::{
     boxalloc::Allocator,
-    color::Color,
+    color::{Color, Shadow},
     position::{AlignItems, Direction, JustifyContent, LayoutStrategy, Position},
     sizing::{Border, Margin, Padding, SizeSpec},
 };
@@ -155,7 +155,11 @@ pub struct Style {
     /// Margin setted for a Frame element
     pub margin: Margin,
 
+    /// Box Border definition
     pub border: Border,
+
+    /// Shadow definition
+    pub shadow: Shadow,
 
     /// Defines how much a flex item will grow.
     /// Default is 0.0 (don't grow).
@@ -203,6 +207,7 @@ impl Default for Style {
             padding: Padding::default(),
             margin: Margin::default(),
             border: Border::default(),
+            shadow: Shadow::default(),
             layout: LayoutStrategy::default(),
             flow: Direction::default(),
             position: Position::default(),

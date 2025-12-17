@@ -9,11 +9,13 @@ pub enum DrawCommand {
     /// A rectangle with optional fill and stroke.
     Rect {
         space: Space,
-        fill_color: Color,
-        stroke_color: Color,
         z_index: u32,
+        fill_color: Color,
         border_radius: u32,
+        stroke_color: Color,
         stroke_width: u32,
+        shadow_color: Color,
+        shadow_blur: f32,
     },
     /// A block of text.
     Text {
@@ -31,11 +33,20 @@ impl DrawCommand {
         color: &Color,
         radius: u32,
         stroke_width: u32,
+        blur: f32,
     ) -> [TVertex; 6] {
-        let w = space.width.unwrap_or(0) as f32;
-        let h = space.height.unwrap_or(0) as f32;
-        let x = space.x as f32;
-        let y = space.y as f32;
+        let mut w = space.width.unwrap_or(0) as f32;
+        let mut h = space.height.unwrap_or(0) as f32;
+        let mut x = space.x as f32;
+        let mut y = space.y as f32;
+
+        if blur > 0.0 {
+            let expansion = blur * 2.0;
+            x -= blur;
+            y -= blur;
+            w += expansion;
+            h += expansion;
+        }
 
         let color_arr: [f32; 4] = (*color).into();
 
@@ -57,6 +68,7 @@ impl DrawCommand {
                 size,
                 radius: r,
                 stroke_width: s,
+                blur,
             },
             TVertex {
                 position: [x, y + h], // Bottom-Left
@@ -65,6 +77,7 @@ impl DrawCommand {
                 size,
                 radius: r,
                 stroke_width: s,
+                blur,
             },
             TVertex {
                 position: [x + w, y], // Top-Right
@@ -73,6 +86,7 @@ impl DrawCommand {
                 size,
                 radius: r,
                 stroke_width: s,
+                blur,
             },
             // Triangle 2 (Top-Right, Bottom-Left, Bottom-Right)
             TVertex {
@@ -82,6 +96,7 @@ impl DrawCommand {
                 size,
                 radius: r,
                 stroke_width: s,
+                blur,
             },
             TVertex {
                 position: [x, y + h], // Bottom-Left
@@ -90,6 +105,7 @@ impl DrawCommand {
                 size,
                 radius: r,
                 stroke_width: s,
+                blur,
             },
             TVertex {
                 position: [x + w, y + h], // Bottom-Right
@@ -98,6 +114,7 @@ impl DrawCommand {
                 size,
                 radius: r,
                 stroke_width: s,
+                blur,
             },
         ]
     }
@@ -111,8 +128,21 @@ impl DrawCommand {
                 z_index: _,
                 border_radius,
                 stroke_width,
+                shadow_color,
+                shadow_blur,
             } => {
                 let mut vertices = Vec::new();
+
+                // Draw Shadow (if visible)
+                if shadow_color.a > 0 && *shadow_blur > 0.0 {
+                    vertices.extend(Self::rect_vertices(
+                        space,
+                        shadow_color,
+                        *border_radius,
+                        0,
+                        *shadow_blur,
+                    ));
+                }
 
                 // Draw Fill (if visible)
                 if fill_color.a > 0 {
@@ -121,6 +151,7 @@ impl DrawCommand {
                         fill_color,
                         *border_radius,
                         0, // Fill has 0 stroke width
+                        0.0,
                     ));
                 }
 
@@ -131,6 +162,7 @@ impl DrawCommand {
                         stroke_color,
                         *border_radius,
                         *stroke_width,
+                        0.0,
                     ));
                 }
 
@@ -168,6 +200,7 @@ impl DrawCommand {
                             &Color::new(c.r(), c.g(), c.b(), c.a()),
                             0, // Text currently has 0 radius
                             0, // Text currently has 0 stroke width
+                            0.0,
                         ));
                     },
                 );

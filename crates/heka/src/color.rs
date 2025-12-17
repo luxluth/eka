@@ -174,3 +174,19 @@ impl From<Color> for [f32; 4] {
         ]
     }
 }
+
+#[derive(Debug, Clone, Copy)]
+pub struct Shadow {
+    /// Determines the "softness" or spread of the shadow in pixels
+    pub blur: f32,
+    pub color: Color,
+}
+
+impl Default for Shadow {
+    fn default() -> Self {
+        Self {
+            blur: 0.0,
+            color: Color::black,
+        }
+    }
+}

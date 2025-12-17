@@ -242,6 +242,8 @@ impl ApplicationHandler for Application {
                 })
                 .unwrap_or(CompositeAlpha::Opaque);
 
+            debug!("[vulkan] using alpha composite - {composite_alpha:?}");
+
             Swapchain::new(
                 self.device.clone(),
                 surface.clone(),
@@ -323,8 +325,16 @@ impl ApplicationHandler for Application {
                         subpass.num_color_attachments(),
                         ColorBlendAttachmentState {
                             blend: Some(
-                                vulkano::pipeline::graphics::color_blend::AttachmentBlend::alpha(),
+                                vulkano::pipeline::graphics::color_blend::AttachmentBlend {
+                                    src_color_blend_factor: vulkano::pipeline::graphics::color_blend::BlendFactor::One,
+                                    dst_color_blend_factor: vulkano::pipeline::graphics::color_blend::BlendFactor::OneMinusSrcAlpha,
+                                    src_alpha_blend_factor: vulkano::pipeline::graphics::color_blend::BlendFactor::One,
+                                    dst_alpha_blend_factor: vulkano::pipeline::graphics::color_blend::BlendFactor::OneMinusSrcAlpha,
+                                    color_blend_op: vulkano::pipeline::graphics::color_blend::BlendOp::Add,
+                                    alpha_blend_op: vulkano::pipeline::graphics::color_blend::BlendOp::Add,
+                                },
                             ),
+                            color_write_mask: vulkano::pipeline::graphics::color_blend::ColorComponents::all(),
                             ..Default::default()
                         },
                     )),
