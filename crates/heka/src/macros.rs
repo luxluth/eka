@@ -3,7 +3,7 @@
 /// a same frame element
 /// ```rust,ignore
 /// style!(frame1, &mut root, {
-///     background_color: color!(RED),
+///     background_color: clr!(RED),
 ///     width: size!(fill),
 ///     ...
 /// });
@@ -137,12 +137,12 @@ macro_rules! pos {
 ///
 /// # Examples
 /// ```rust,ignore
-/// color!(red);           // Named color
-/// color!(0xFF0000FF);    // Opaque Red
-/// color!(0x00FF0080);    // Semi-transparent Green
+/// clr!(red);           // Named color
+/// clr!(0xFF0000FF);    // Opaque Red
+/// clr!(0x00FF0080);    // Semi-transparent Green
 /// ```
 #[macro_export]
-macro_rules! color {
+macro_rules! clr {
     ($name:ident) => {
         $crate::color::Color::$name
     };
@@ -286,8 +286,8 @@ macro_rules! margin {
 /// # Examples
 /// ```rust,ignore
 /// border!(2);                 // 2px wide, default color (Black/Transparent)
-/// border!(2, color!(red));    // 2px wide, Red
-/// border!(2, 5, color!(red)); // 2px wide, 5px radius, Red
+/// border!(2, clr!(red));    // 2px wide, Red
+/// border!(2, 5, clr!(red)); // 2px wide, 5px radius, Red
 /// ```
 #[macro_export]
 macro_rules! border {
@@ -313,9 +313,9 @@ macro_rules! border {
     }; // Ambiguity resolution: If 2 args are numbers, assume size and radius.
        // If 2 args are number and Color (expr), it's handled by the macro matcher if types were checked,
        // but macro matching is purely syntactic.
-       // We can't easily distinguish `border!(2, 5)` vs `border!(2, color!(RED))`.
+       // We can't easily distinguish `border!(2, 5)` vs `border!(2, clr!(RED))`.
        // So we rely on explicit usage or differing syntax if needed.
-       // However, since `color!` expands to `Color::...`, we can try to add a variant for 3 args.
+       // However, since `clr!` expands to `Color::...`, we can try to add a variant for 3 args.
 }
 
 /// Specifies a shadow for an element.
@@ -323,7 +323,7 @@ macro_rules! border {
 /// # Examples
 /// ```rust,ignore
 /// shadow!(10.0);                 // 10px blur, default color (Black)
-/// shadow!(10.0, color!(red));    // 10px blur, Red
+/// shadow!(10.0, clr!(red));    // 10px blur, Red
 /// ```
 #[macro_export]
 macro_rules! shadow {

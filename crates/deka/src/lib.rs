@@ -4,11 +4,10 @@ pub use heka;
 use heka::Frame;
 use heka::Style;
 use heka::align;
-use heka::color;
+use heka::clr;
 use heka::justify;
 use heka::margin;
 use heka::pad;
-use log::debug;
 use log::warn;
 pub use text_style::AsCosmicColor;
 pub use text_style::TextStyle;
@@ -142,7 +141,7 @@ impl DAL {
             width: size!(fill),
             height: size!(fill),
             layout: layout!(no_layout),
-            background_color: color!(red),
+            background_color: clr!(transparent),
         });
 
         let mut elements: HashMap<heka::CapsuleRef, Box<dyn FrameElement>> = HashMap::new();
@@ -274,11 +273,11 @@ impl DAL {
             border: heka::sizing::Border {
                 size: 2,
                 radius: 5,
-                color: color!(0x8f8f9dFF),
+                color: clr!(0x8f8f9dFF),
             },
             justify_content: justify!(center),
             align_items: align!(center),
-            background_color: color!(0xe9e9edFF),
+            background_color: clr!(0xe9e9edFF),
             layout: layout!(flex),
         });
 
@@ -375,7 +374,6 @@ impl DAL {
 
 impl DAL {
     pub fn render(&self) -> Vec<cmd::DrawCommand> {
-        self.debug();
         // Tuple: (Z-Index, Priority, CapsuleRef, Command)
         // Priority: 0 for Rects, 1 for Text. Ensures Text is always ON TOP of Rects for same Z.
         // CapsuleRef: Used as a stable tie-breaker to prevent HashMap-induced flickering.

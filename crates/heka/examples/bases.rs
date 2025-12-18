@@ -1,13 +1,13 @@
 use std::time::Instant;
 
-use heka::{Frame, Root, color, pad, size, style};
+use heka::{Frame, Root, clr, pad, size, style};
 
 fn main() {
     let mut root = Root::new(800, 600);
     let root_frame: Frame = root.add_frame(None);
 
     style!(root_frame, &mut root, {
-        background_color: color!(red),
+        background_color: clr!(red),
         width: size!(fill),
         height: size!(fill),
         padding: pad!(10, 20),
@@ -16,23 +16,14 @@ fn main() {
 
     let frame: Frame = root.add_frame_child(&root_frame, None);
     style!(frame, &mut root, {
-        background_color: color!(risd_blue),
+        background_color: clr!(risd_blue),
         width: size!(fill),
         flex_grow: 1.0,
     });
 
     let frame: Frame = root.add_frame_child(&root_frame, None);
     style!(frame, &mut root, {
-        background_color: color!(dodger_blue),
-        width: size!(fill),
-        flex_grow: 1.0,
-    });
-
-    root.remove_frame(frame.get_ref());
-
-    let frame: Frame = root.add_frame_child(&root_frame, None);
-    style!(frame, &mut root, {
-        background_color: color!(dodger_blue),
+        background_color: clr!(dodger_blue),
         width: size!(fill),
         flex_grow: 1.0,
     });
@@ -41,7 +32,16 @@ fn main() {
 
     let frame: Frame = root.add_frame_child(&root_frame, None);
     style!(frame, &mut root, {
-        background_color: color!(dodger_blue),
+        background_color: clr!(dodger_blue),
+        width: size!(fill),
+        flex_grow: 1.0,
+    });
+
+    root.remove_frame(frame.get_ref());
+
+    let frame: Frame = root.add_frame_child(&root_frame, None);
+    style!(frame, &mut root, {
+        background_color: clr!(dodger_blue),
         width: size!(fill),
         flex_grow: 2.0,
     });

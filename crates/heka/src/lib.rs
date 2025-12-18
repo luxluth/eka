@@ -911,8 +911,12 @@ impl Root {
                             // NoStrategy
                             child_given_x = current_x;
                             child_given_y = current_y;
-                            child_given_w = content_w; // Default: fill width
-                            child_given_h = child_desired_h; // Default: use desired height
+
+                            // We give the child the full content box of the parent.
+                            // The child's style.width/height.resolve_size() will decide
+                            // whether to use this space (Percent/Fill) or ignore it (Fit/Pixel).
+                            child_given_w = content_w;
+                            child_given_h = content_h;
                         }
                     }
 
