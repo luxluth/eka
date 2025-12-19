@@ -1,6 +1,7 @@
 use super::DAL;
 use super::TextStyle;
 use super::renderer::gui::utils::TVertex;
+use crate::renderer::atlas::{Atlas, TextureUpdate};
 use cosmic_text::Buffer;
 use heka::{Space, color::Color};
 
@@ -69,6 +70,7 @@ impl DrawCommand {
                 radius: r,
                 stroke_width: s,
                 blur,
+                obj_type: 0,
             },
             // Bottom-Left
             TVertex {
@@ -79,6 +81,7 @@ impl DrawCommand {
                 radius: r,
                 stroke_width: s,
                 blur,
+                obj_type: 0,
             },
             // Top-Right
             TVertex {
@@ -89,6 +92,7 @@ impl DrawCommand {
                 radius: r,
                 stroke_width: s,
                 blur,
+                obj_type: 0,
             },
             // Bottom-Right
             TVertex {
@@ -99,11 +103,17 @@ impl DrawCommand {
                 radius: r,
                 stroke_width: s,
                 blur,
+                obj_type: 0,
             },
         ]
     }
 
-    pub fn to_geometry(&self, dal: &mut DAL) -> (Vec<TVertex>, Vec<u32>) {
+    pub fn to_geometry(
+        &self,
+        dal: &mut DAL,
+        atlas: &mut Atlas,
+        uploads: &mut Vec<TextureUpdate>,
+    ) -> (Vec<TVertex>, Vec<u32>) {
         match self {
             DrawCommand::Rect {
                 space,
@@ -175,46 +185,104 @@ impl DrawCommand {
                 let Some(buffer) = dal.get_buffer::<Buffer>(*buffer_ref) else {
                     return (vec![], vec![]);
                 };
-
                 let buffer = buffer.clone();
+
+                // Color from style
+                let color_arr: [f32; 4] = style.color.into();
 
                 let mut vertices = vec![];
                 let mut indices = vec![];
 
-                buffer.draw(
-                    &mut dal.font_system,
-                    &mut dal.swash_cache,
-                    cosmic_text::Color(style.color.as_u32()),
-                    |x, y, w, h, c| {
-                        if c.a() == 0 {
-                            return;
+                for run in buffer.layout_runs() {
+                    for glyph in run.glyphs.iter() {
+                        let phys = glyph.physical((space.x as f32, space.y as f32), 1.0);
+
+                        let image = dal
+                            .swash_cache
+                            .get_image(&mut dal.font_system, phys.cache_key);
+
+                        if let Some(image) = image {
+                            if let Some((ax, ay, is_new)) = atlas.allocate(
+                                phys.cache_key,
+                                image.placement.width,
+                                image.placement.height,
+                            ) {
+                                if is_new {
+                                    uploads.push(TextureUpdate {
+                                        x: ax,
+                                        y: ay,
+                                        width: image.placement.width,
+                                        height: image.placement.height,
+                                        data: image.data.clone(),
+                                    });
+                                }
+
+                                let x = phys.x as f32 + image.placement.left as f32;
+                                let y = phys.y as f32 - image.placement.top as f32;
+                                let w = image.placement.width as f32;
+                                let h = image.placement.height as f32;
+
+                                // UVs
+                                let u0 = ax as f32 / atlas.width as f32;
+                                let v0 = ay as f32 / atlas.height as f32;
+                                let u1 = (ax + image.placement.width) as f32 / atlas.width as f32;
+                                let v1 = (ay + image.placement.height) as f32 / atlas.height as f32;
+
+                                let start_v = vertices.len() as u32;
+
+                                vertices.push(TVertex {
+                                    position: [x, y],
+                                    color: color_arr,
+                                    uv: [u0, v0],
+                                    size: [w, h], // Not used for text but good to have
+                                    radius: 0.0,
+                                    stroke_width: 0.0,
+                                    blur: 0.0,
+                                    obj_type: 1,
+                                });
+                                vertices.push(TVertex {
+                                    position: [x, y + h],
+                                    color: color_arr,
+                                    uv: [u0, v1],
+                                    size: [w, h],
+                                    radius: 0.0,
+                                    stroke_width: 0.0,
+                                    blur: 0.0,
+                                    obj_type: 1,
+                                });
+                                vertices.push(TVertex {
+                                    position: [x + w, y],
+                                    color: color_arr,
+                                    uv: [u1, v0],
+                                    size: [w, h],
+                                    radius: 0.0,
+                                    stroke_width: 0.0,
+                                    blur: 0.0,
+                                    obj_type: 1,
+                                });
+                                vertices.push(TVertex {
+                                    position: [x + w, y + h],
+                                    color: color_arr,
+                                    uv: [u1, v1],
+                                    size: [w, h],
+                                    radius: 0.0,
+                                    stroke_width: 0.0,
+                                    blur: 0.0,
+                                    obj_type: 1,
+                                });
+
+                                indices.extend([
+                                    start_v,
+                                    start_v + 1,
+                                    start_v + 2,
+                                    start_v + 2,
+                                    start_v + 1,
+                                    start_v + 3,
+                                ]);
+                            }
                         }
-
-                        let start_v = vertices.len() as u32;
-
-                        vertices.extend(Self::rect_vertices(
-                            &Space {
-                                x: x + space.x,
-                                y: y + space.y,
-                                width: Some(w),
-                                height: Some(h),
-                            },
-                            &Color::new(c.r(), c.g(), c.b(), c.a()),
-                            0, // Text currently has 0 radius
-                            0, // Text currently has 0 stroke width
-                            0.0,
-                        ));
-
-                        indices.extend([
-                            start_v,
-                            start_v + 1,
-                            start_v + 2,
-                            start_v + 2,
-                            start_v + 1,
-                            start_v + 3,
-                        ]);
-                    },
-                );
+                    }
+                }
 
                 (vertices, indices)
             }

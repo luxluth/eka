@@ -12,7 +12,7 @@ fn main() -> Result<(), impl std::error::Error> {
         1000,
         700,
         WindowAttr {
-            resizable: true,
+            resizable: false,
             title: "Hello from Deka!".into(),
             ..WindowAttr::default()
         },
