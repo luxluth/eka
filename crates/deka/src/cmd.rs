@@ -34,7 +34,7 @@ impl DrawCommand {
         radius: u32,
         stroke_width: u32,
         blur: f32,
-    ) -> [TVertex; 6] {
+    ) -> [TVertex; 4] {
         let mut w = space.width.unwrap_or(0) as f32;
         let mut h = space.height.unwrap_or(0) as f32;
         let mut x = space.x as f32;
@@ -60,9 +60,9 @@ impl DrawCommand {
         let s = stroke_width as f32;
 
         [
-            // Triangle 1 (Top-Left, Bottom-Left, Top-Right)
+            // Top-Left
             TVertex {
-                position: [x, y], // Top-Left
+                position: [x, y],
                 color: color_arr,
                 uv: uv_tl,
                 size,
@@ -70,8 +70,9 @@ impl DrawCommand {
                 stroke_width: s,
                 blur,
             },
+            // Bottom-Left
             TVertex {
-                position: [x, y + h], // Bottom-Left
+                position: [x, y + h],
                 color: color_arr,
                 uv: uv_bl,
                 size,
@@ -79,8 +80,9 @@ impl DrawCommand {
                 stroke_width: s,
                 blur,
             },
+            // Top-Right
             TVertex {
-                position: [x + w, y], // Top-Right
+                position: [x + w, y],
                 color: color_arr,
                 uv: uv_tr,
                 size,
@@ -88,27 +90,9 @@ impl DrawCommand {
                 stroke_width: s,
                 blur,
             },
-            // Triangle 2 (Top-Right, Bottom-Left, Bottom-Right)
+            // Bottom-Right
             TVertex {
-                position: [x + w, y], // Top-Right
-                color: color_arr,
-                uv: uv_tr,
-                size,
-                radius: r,
-                stroke_width: s,
-                blur,
-            },
-            TVertex {
-                position: [x, y + h], // Bottom-Left
-                color: color_arr,
-                uv: uv_bl,
-                size,
-                radius: r,
-                stroke_width: s,
-                blur,
-            },
-            TVertex {
-                position: [x + w, y + h], // Bottom-Right
+                position: [x + w, y + h],
                 color: color_arr,
                 uv: uv_br,
                 size,
@@ -119,7 +103,7 @@ impl DrawCommand {
         ]
     }
 
-    pub fn to_vertices(&self, dal: &mut DAL) -> Vec<TVertex> {
+    pub fn to_geometry(&self, dal: &mut DAL) -> (Vec<TVertex>, Vec<u32>) {
         match self {
             DrawCommand::Rect {
                 space,
@@ -132,10 +116,24 @@ impl DrawCommand {
                 shadow_blur,
             } => {
                 let mut vertices = Vec::new();
+                let mut indices = Vec::new();
+
+                let mut add_quad = |quad_vertices: [TVertex; 4]| {
+                    let start_v = vertices.len() as u32;
+                    vertices.extend(quad_vertices);
+                    indices.extend([
+                        start_v,
+                        start_v + 1,
+                        start_v + 2,
+                        start_v + 2,
+                        start_v + 1,
+                        start_v + 3,
+                    ]);
+                };
 
                 // Draw Shadow (if visible)
                 if shadow_color.a > 0 && *shadow_blur > 0.0 {
-                    vertices.extend(Self::rect_vertices(
+                    add_quad(Self::rect_vertices(
                         space,
                         shadow_color,
                         *border_radius,
@@ -146,7 +144,7 @@ impl DrawCommand {
 
                 // Draw Fill (if visible)
                 if fill_color.a > 0 {
-                    vertices.extend(Self::rect_vertices(
+                    add_quad(Self::rect_vertices(
                         space,
                         fill_color,
                         *border_radius,
@@ -157,7 +155,7 @@ impl DrawCommand {
 
                 // Draw Stroke (if visible and has width)
                 if stroke_color.a > 0 && *stroke_width > 0 {
-                    vertices.extend(Self::rect_vertices(
+                    add_quad(Self::rect_vertices(
                         space,
                         stroke_color,
                         *border_radius,
@@ -166,7 +164,7 @@ impl DrawCommand {
                     ));
                 }
 
-                vertices
+                (vertices, indices)
             }
             DrawCommand::Text {
                 buffer_ref,
@@ -175,12 +173,14 @@ impl DrawCommand {
                 z_index: _,
             } => {
                 let Some(buffer) = dal.get_buffer::<Buffer>(*buffer_ref) else {
-                    return vec![];
+                    return (vec![], vec![]);
                 };
 
                 let buffer = buffer.clone();
 
                 let mut vertices = vec![];
+                let mut indices = vec![];
+
                 buffer.draw(
                     &mut dal.font_system,
                     &mut dal.swash_cache,
@@ -189,6 +189,8 @@ impl DrawCommand {
                         if c.a() == 0 {
                             return;
                         }
+
+                        let start_v = vertices.len() as u32;
 
                         vertices.extend(Self::rect_vertices(
                             &Space {
@@ -202,10 +204,19 @@ impl DrawCommand {
                             0, // Text currently has 0 stroke width
                             0.0,
                         ));
+
+                        indices.extend([
+                            start_v,
+                            start_v + 1,
+                            start_v + 2,
+                            start_v + 2,
+                            start_v + 1,
+                            start_v + 3,
+                        ]);
                     },
                 );
 
-                vertices
+                (vertices, indices)
             }
         }
     }
