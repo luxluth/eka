@@ -195,7 +195,7 @@ impl DrawCommand {
 
                 for run in buffer.layout_runs() {
                     for glyph in run.glyphs.iter() {
-                        let phys = glyph.physical((space.x as f32, space.y as f32), 1.0);
+                        let phys = glyph.physical((space.x as f32, space.y as f32 + run.line_y), 1.0);
 
                         let image = dal
                             .swash_cache
