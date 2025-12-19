@@ -7,6 +7,7 @@ layout(location = 3) in vec2 size;
 layout(location = 4) in float radius;
 layout(location = 5) in float stroke_width;
 layout(location = 6) in float blur;
+layout(location = 7) in uint obj_type;
 
 layout(location = 0) out vec4 v_color;
 layout(location = 1) out vec2 v_uv;
@@ -14,6 +15,7 @@ layout(location = 2) out vec2 v_size;
 layout(location = 3) out float v_radius;
 layout(location = 4) out float v_stroke_width;
 layout(location = 5) out float v_blur;
+layout(location = 6) out flat uint v_type;
 
 layout(push_constant) uniform PushConstants {
     vec2 screen_size;
@@ -30,4 +32,5 @@ void main() {
     v_radius = radius;
     v_stroke_width = stroke_width;
     v_blur = blur;
+    v_type = obj_type;
 }

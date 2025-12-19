@@ -8,11 +8,18 @@ use vulkano::{
         AutoCommandBufferBuilder, CommandBufferUsage, RenderPassBeginInfo, SubpassBeginInfo,
         SubpassContents, allocator::StandardCommandBufferAllocator,
     },
+    descriptor_set::{
+        DescriptorSet, WriteDescriptorSet, allocator::StandardDescriptorSetAllocator,
+    },
     device::{
         Device, DeviceCreateInfo, DeviceExtensions, Queue, QueueCreateInfo, QueueFlags,
         physical::PhysicalDeviceType,
     },
-    image::{Image, ImageUsage, view::ImageView},
+    image::{
+        Image, ImageUsage,
+        sampler::{Filter, Sampler, SamplerAddressMode, SamplerCreateInfo},
+        view::ImageView,
+    },
     instance::{Instance, InstanceCreateFlags, InstanceCreateInfo},
     memory::allocator::StandardMemoryAllocator,
     pipeline::{
@@ -54,6 +61,8 @@ pub struct Application {
     device: Arc<Device>,
     queue: Arc<Queue>,
     command_buffer_allocator: Arc<StandardCommandBufferAllocator>,
+    descriptor_set_allocator: Arc<StandardDescriptorSetAllocator>,
+    sampler: Arc<Sampler>,
     rcx: Option<RenderContext>,
     gui_renderer: GuiRenderer,
     dal: DAL,
@@ -175,6 +184,22 @@ impl Application {
             Default::default(),
         ));
 
+        let descriptor_set_allocator = Arc::new(StandardDescriptorSetAllocator::new(
+            device.clone(),
+            Default::default(),
+        ));
+
+        let sampler = Sampler::new(
+            device.clone(),
+            SamplerCreateInfo {
+                mag_filter: Filter::Nearest,
+                min_filter: Filter::Nearest,
+                address_mode: [SamplerAddressMode::ClampToEdge; 3],
+                ..Default::default()
+            },
+        )
+        .unwrap();
+
         let rcx = None;
 
         Application {
@@ -182,6 +207,8 @@ impl Application {
             device,
             queue,
             command_buffer_allocator,
+            descriptor_set_allocator,
+            sampler,
             gui_renderer,
             rcx,
             dal,
@@ -441,9 +468,13 @@ impl ApplicationHandler for Application {
                     rcx.recreate_swapchain = true;
                 }
 
-                if let Some(image_fence) = &mut rcx.fences[image_index as usize] {
-                    image_fence.wait(None).unwrap();
-                    image_fence.cleanup_finished();
+                // Wait for all fences to ensure we can safely update resources (like Atlas)
+                // that might be shared across frames.
+                for fence in &mut rcx.fences {
+                    if let Some(image_fence) = fence {
+                        image_fence.wait(None).unwrap();
+                        image_fence.cleanup_finished();
+                    }
                 }
 
                 let mut builder = AutoCommandBufferBuilder::primary(
@@ -452,6 +483,20 @@ impl ApplicationHandler for Application {
                     CommandBufferUsage::OneTimeSubmit,
                 )
                 .unwrap();
+
+                self.dal.compute_layout();
+                let commands = self.dal.render();
+
+                if commands.is_empty() {
+                    debug!("Frame {}: No draw commands generated!", image_index);
+                }
+
+                self.gui_renderer.upload_draw_commands(
+                    image_index as usize,
+                    &commands,
+                    &mut self.dal,
+                    &mut builder,
+                );
 
                 let scissor = Scissor {
                     offset: [rcx.viewport.offset[0] as u32, rcx.viewport.offset[1] as u32],
@@ -489,19 +534,25 @@ impl ApplicationHandler for Application {
                     )
                     .unwrap();
 
-                self.dal.compute_layout();
-                let commands = self.dal.render();
+                let layout = rcx.pipeline.layout().set_layouts().get(0).unwrap();
+                let descriptor_set = DescriptorSet::new(
+                    self.descriptor_set_allocator.clone(),
+                    layout.clone(),
+                    [WriteDescriptorSet::image_view_sampler(
+                        0,
+                        ImageView::new_default(self.gui_renderer.atlas.texture.clone()).unwrap(),
+                        self.sampler.clone(),
+                    )],
+                    [],
+                )
+                .unwrap();
 
-                if commands.is_empty() {
-                    debug!("Frame {}: No draw commands generated!", image_index);
-                }
-
-                self.gui_renderer.upload_draw_commands(
+                self.gui_renderer.render(
                     image_index as usize,
-                    &commands,
-                    &mut self.dal,
+                    &mut builder,
+                    &rcx.pipeline.layout(),
+                    &descriptor_set,
                 );
-                self.gui_renderer.render(image_index as usize, &mut builder);
 
                 builder.end_render_pass(Default::default()).unwrap();
 
