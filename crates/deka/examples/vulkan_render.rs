@@ -1,9 +1,9 @@
 use cosmic_text::FamilyOwned;
-use deka::{DAL, PanelRef, TextStyle, WindowAttr};
+use deka::{DAL, TextStyle, WindowAttr, eka};
 use heka::{
-    Style, align, border, clr,
+    align, border, clr,
     color::Shadow,
-    flow, justify, pad, shadow, size,
+    flow, justify, make_style, pad, shadow, size,
     sizing::{Border, Padding},
 };
 
@@ -35,59 +35,57 @@ fn main() -> Result<(), impl std::error::Error> {
             (Border::default(), Shadow::default(), Padding::default())
         };
 
-    let outer_panel = dal.new_panel(
-        None::<PanelRef>,
-        Style {
-            flow: flow!(column),
-            padding: first_frame_pad,
-            width: size!(100%),
-            height: size!(100%),
-            background_color: clr!(transparent),
-            ..Default::default()
-        },
-    );
-
-    let panel = dal.new_panel(
-        Some(outer_panel),
-        Style {
-            flow: flow!(column),
-            gap: 2,
-            padding: pad!(20),
-            width: size!(100%),
-            height: size!(100%),
-            justify_content: justify!(center),
-            align_items: align!(center),
-            shadow: shadow_default,
-            border: border_default,
-            background_color: clr!(white),
-            ..Default::default()
-        },
-    );
-
-    let label = dal.new_label(
-        "Count = 0",
-        Some(panel),
-        Some(TextStyle {
-            color: clr!(risd_blue),
-            font_size: 32.0,
-            font_family: FamilyOwned::Name("Fantasque Sans Mono".into()),
-            ..Default::default()
-        }),
-    );
-
-    let _ = dal.new_button(
-        "increment +1".to_string(),
-        Some(panel),
-        move |dal, _event| {
-            count += 1;
-            dal.set_label_text(label, format!("Count = {count}").to_string());
-        },
-        Some(TextStyle {
-            font_size: 14.0,
-            font_family: FamilyOwned::Name("Fantasque Sans Mono".into()),
-            ..Default::default()
-        }),
-    );
+    eka! {
+        dal,
+        Panel {
+            style: make_style! {
+                flow: flow!(column),
+                padding: first_frame_pad,
+                width: size!(100%),
+                height: size!(100%),
+                background_color: clr!(transparent),
+            },
+            children: [
+                Panel {
+                    style: make_style! {
+                        flow: flow!(column),
+                        gap: 2,
+                        padding: pad!(20),
+                        width: size!(100%),
+                        height: size!(100%),
+                        justify_content: justify!(center),
+                        align_items: align!(center),
+                        shadow: shadow_default,
+                        border: border_default,
+                        background_color: clr!(white),
+                    },
+                    children: [
+                        count_label = Label {
+                            text: "Count = 0",
+                            style: TextStyle {
+                                color: clr!(risd_blue),
+                                font_size: 32.0,
+                                font_family: FamilyOwned::Name("Fantasque Sans Mono".into()),
+                                ..Default::default()
+                            }
+                        },
+                        Button {
+                            text: "increment +1",
+                            on_click: move |dal, _| {
+                                count += 1;
+                                dal.set_label_text(count_label, format!("Count = {count}"));
+                            },
+                            style: TextStyle {
+                                font_size: 14.0,
+                                font_family: FamilyOwned::Name("Fantasque Sans Mono".into()),
+                                ..Default::default()
+                            }
+                        }
+                    ]
+                }
+            ]
+        }
+    };
 
     dal.debug();
     dal.run()

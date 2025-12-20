@@ -1,3 +1,22 @@
+/// A convenient macro to create a style.
+/// ```rust,ignore
+/// let s = make_style!({
+///     background_color: clr!(RED),
+///     width: size!(fill),
+///     ...
+/// });
+/// ```
+#[macro_export]
+macro_rules! make_style {
+    ($($field:ident : $value:expr),* $(,)?) => {{
+        let mut style = $crate::Style::default();
+        $(
+            style.$field = $value;
+        )*
+        style
+    }};
+}
+
 /// A convinient macro to modify a frame style.
 /// It can be call multiple time in a row for
 /// a same frame element

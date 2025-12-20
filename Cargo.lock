@@ -407,6 +407,7 @@ name = "deka"
 version = "0.0.1"
 dependencies = [
  "cosmic-text",
+ "edl-macro",
  "env_logger",
  "heka",
  "log",
