@@ -27,13 +27,13 @@ pub mod elements;
 pub mod renderer;
 mod text_style;
 
-/// Deka Abstraction Layer
-pub struct DAL {
+/// Deka UI Context
+pub struct Context {
     root: heka::Root,
     root_frame: heka::Frame,
     elements: HashMap<heka::CapsuleRef, Box<dyn FrameElement>>,
-    click_callbacks: HashMap<heka::CapsuleRef, Box<dyn FnMut(&mut DAL, &ClickEvent)>>,
-    hover_callbacks: HashMap<heka::CapsuleRef, Box<dyn FnMut(&mut DAL, &HoverEvent)>>,
+    click_callbacks: HashMap<heka::CapsuleRef, Box<dyn FnMut(&mut Context, &ClickEvent)>>,
+    hover_callbacks: HashMap<heka::CapsuleRef, Box<dyn FnMut(&mut Context, &HoverEvent)>>,
 
     pub(crate) attr: WindowAttr,
 
@@ -45,7 +45,8 @@ pub struct DAL {
     pub(crate) hovered_element: Option<heka::CapsuleRef>,
     pub(crate) focused_element: Option<heka::CapsuleRef>,
 
-    pub(crate) keyboard_callbacks: HashMap<heka::CapsuleRef, Box<dyn FnMut(&mut DAL, &KeyEvent)>>,
+    pub(crate) keyboard_callbacks:
+        HashMap<heka::CapsuleRef, Box<dyn FnMut(&mut Context, &KeyEvent)>>,
 }
 
 pub mod events {
@@ -174,7 +175,7 @@ impl Default for WindowAttr {
     }
 }
 
-impl DAL {
+impl Context {
     pub fn new(width: u32, height: u32, mut attr: WindowAttr) -> Self {
         let mut root = heka::Root::new(width, height);
         attr.size = (width, height);
@@ -213,7 +214,7 @@ impl DAL {
     }
 }
 
-impl DAL {
+impl Context {
     pub fn new_label<S: ToString>(
         &mut self,
         text: S,
@@ -277,8 +278,8 @@ impl DAL {
     }
 
     pub fn toggle_checkbox(&mut self, element: CheckboxRef) {
-        self.with_component_mut::<Checkbox>(element.0, |checkbox, dal| {
-            checkbox.toggle(&mut dal.root);
+        self.with_component_mut::<Checkbox>(element.0, |checkbox, ctx| {
+            checkbox.toggle(&mut ctx.root);
         });
     }
 
@@ -292,16 +293,16 @@ impl DAL {
 
         self.keyboard_callbacks.insert(
             text_input_ref,
-            Box::new(move |dal, event| {
-                dal.with_component_mut::<TextInput>(text_input_ref, |input, dal| {
-                    input.handle_key(dal, event);
+            Box::new(move |ctx, event| {
+                ctx.with_component_mut::<TextInput>(text_input_ref, |input, ctx| {
+                    input.handle_key(ctx, event);
                 });
             }),
         );
 
         // focusable on click
-        self.on_click(Element(text_input_ref), move |dal, _| {
-            dal.set_focus(Element(text_input_ref));
+        self.on_click(Element(text_input_ref), move |ctx, _| {
+            ctx.set_focus(Element(text_input_ref));
         });
 
         self.elements.insert(text_input_ref, Box::new(text_input));
@@ -309,8 +310,8 @@ impl DAL {
     }
 
     pub fn set_label_text<S: ToString>(&mut self, element: LabelRef, new_text: S) {
-        self.with_component_mut::<Label>(element.0, |label, dal| {
-            label.set_text(&mut dal.root, &mut dal.font_system, new_text.to_string());
+        self.with_component_mut::<Label>(element.0, |label, ctx| {
+            label.set_text(&mut ctx.root, &mut ctx.font_system, new_text.to_string());
         });
     }
 
@@ -324,8 +325,8 @@ impl DAL {
     }
 
     pub fn set_label_style(&mut self, element: LabelRef, new_style: TextStyle) {
-        self.with_component_mut::<Label>(element.0, |label, dal| {
-            label.set_style(&mut dal.root, &mut dal.font_system, new_style);
+        self.with_component_mut::<Label>(element.0, |label, ctx| {
+            label.set_style(&mut ctx.root, &mut ctx.font_system, new_style);
         });
     }
 
@@ -334,7 +335,7 @@ impl DAL {
     fn with_component_mut<T: FrameElement + 'static>(
         &mut self,
         capsule_ref: heka::CapsuleRef,
-        op: impl FnOnce(&mut T, &mut DAL),
+        op: impl FnOnce(&mut T, &mut Context),
     ) {
         if let Some(mut frame_element) = self.elements.remove(&capsule_ref) {
             if let Some(component) = frame_element.as_any_mut().downcast_mut::<T>() {
@@ -361,7 +362,7 @@ impl DAL {
         label_style: Option<TextStyle>,
     ) -> ButtonRef
     where
-        F: FnMut(&mut DAL, &ClickEvent) + 'static,
+        F: FnMut(&mut Context, &ClickEvent) + 'static,
     {
         let parent = if let Some(pf) = parent_frame {
             &Frame::define(pf.raw())
@@ -407,10 +408,10 @@ impl DAL {
     }
 }
 
-impl DAL {
+impl Context {
     pub fn on_hover<F>(&mut self, element: impl ElementRef, callback: F)
     where
-        F: FnMut(&mut DAL, &HoverEvent) + 'static,
+        F: FnMut(&mut Context, &HoverEvent) + 'static,
     {
         self.hover_callbacks
             .insert(element.raw(), Box::new(callback));
@@ -418,14 +419,14 @@ impl DAL {
 
     pub fn on_click<F>(&mut self, element: impl ElementRef, callback: F)
     where
-        F: FnMut(&mut DAL, &ClickEvent) + 'static,
+        F: FnMut(&mut Context, &ClickEvent) + 'static,
     {
         self.click_callbacks
             .insert(element.raw(), Box::new(callback));
     }
 }
 
-impl DAL {
+impl Context {
     pub fn run(self) -> Result<(), impl std::error::Error> {
         use winit::event_loop::EventLoop;
         let _ = env_logger::try_init();
@@ -452,7 +453,7 @@ impl DAL {
     }
 }
 
-impl DAL {
+impl Context {
     pub(crate) fn click(&mut self, mouse_button: MouseButton, pressed: bool) {
         if pressed {
             self.mouse_pressed = true;
@@ -553,7 +554,7 @@ impl DAL {
     }
 }
 
-impl DAL {
+impl Context {
     pub fn render(&self) -> Vec<cmd::DrawCommand> {
         // Tuple: (Z-Index, Priority, CapsuleRef, Command)
         // Priority: 0 for Rects, 1 for Text. Ensures Text is always ON TOP of Rects for same Z.
@@ -607,7 +608,7 @@ impl DAL {
     }
 }
 
-impl DAL {
+impl Context {
     pub fn get_buffer<T: 'static>(&self, buffer_ref: usize) -> Option<&T> {
         self.root.get_binding(buffer_ref)
     }
@@ -618,7 +619,7 @@ impl DAL {
 }
 
 #[cfg(feature = "debug")]
-impl DAL {
+impl Context {
     pub fn debug(&self) {
         self.root.debug_layout_tree();
     }

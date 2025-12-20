@@ -1,5 +1,5 @@
 use cosmic_text::FamilyOwned;
-use deka::{DAL, TextStyle, WindowAttr, eka};
+use deka::{Context, TextStyle, WindowAttr, eka};
 use heka::{
     align, border, clr,
     color::Shadow,
@@ -8,7 +8,7 @@ use heka::{
 };
 
 fn main() -> Result<(), impl std::error::Error> {
-    let mut dal = DAL::new(
+    let mut ctx = Context::new(
         1000,
         700,
         WindowAttr {
@@ -36,7 +36,7 @@ fn main() -> Result<(), impl std::error::Error> {
         };
 
     eka! {
-        dal,
+        ctx,
         Panel {
             style: make_style! {
                 flow: flow!(column),
@@ -71,9 +71,9 @@ fn main() -> Result<(), impl std::error::Error> {
                         },
                         Button {
                             text: "increment +1",
-                            on_click: move |dal, _| {
+                            on_click: move |ctx, _| {
                                 count += 1;
-                                dal.set_label_text(count_label, format!("Count = {count}"));
+                                ctx.set_label_text(count_label, format!("Count = {count}"));
                             },
                             style: TextStyle {
                                 font_size: 14.0,
@@ -87,6 +87,6 @@ fn main() -> Result<(), impl std::error::Error> {
         }
     };
 
-    dal.debug();
-    dal.run()
+    ctx.debug();
+    ctx.run()
 }

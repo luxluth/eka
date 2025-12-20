@@ -7,7 +7,7 @@ use syn::{
 };
 
 struct EkaInput {
-    dal: Ident,
+    ctx: Ident,
     root_element: ElementDef,
 }
 
@@ -51,10 +51,10 @@ struct CommonAttrs {
 
 impl Parse for EkaInput {
     fn parse(input: ParseStream) -> Result<Self> {
-        let dal: Ident = input.parse()?;
+        let ctx: Ident = input.parse()?;
         input.parse::<Token![,]>()?;
         let root_element = input.parse()?;
-        Ok(EkaInput { dal, root_element })
+        Ok(EkaInput { ctx, root_element })
     }
 }
 
@@ -221,9 +221,9 @@ impl Parse for ElementDef {
 #[proc_macro]
 pub fn eka(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as EkaInput);
-    let dal = &input.dal;
+    let ctx = &input.ctx;
 
-    let code = generate_element(&input.root_element, dal, quote!(None::<deka::Element>));
+    let code = generate_element(&input.root_element, ctx, quote!(None::<deka::Element>));
 
     quote! {
         {
@@ -235,7 +235,7 @@ pub fn eka(input: TokenStream) -> TokenStream {
 
 fn generate_element(
     def: &ElementDef,
-    dal: &Ident,
+    ctx: &Ident,
     parent: proc_macro2::TokenStream,
 ) -> proc_macro2::TokenStream {
     let binding = &def.binding;
@@ -252,7 +252,7 @@ fn generate_element(
             };
             (
                 quote! {
-                    #dal.new_label(#text, #parent, #style)
+                    #ctx.new_label(#text, #parent, #style)
                 },
                 common,
             )
@@ -269,7 +269,7 @@ fn generate_element(
             };
             (
                 quote! {
-                    #dal.new_button(#text, #parent, #on_click, #style)
+                    #ctx.new_button(#text, #parent, #on_click, #style)
                 },
                 common,
             )
@@ -288,13 +288,13 @@ fn generate_element(
 
             let children_code: Vec<_> = children
                 .iter()
-                .map(|child| generate_element(child, dal, quote!(Some(#panel_ref))))
+                .map(|child| generate_element(child, ctx, quote!(Some(#panel_ref))))
                 .collect();
 
             (
                 quote! {
                     {
-                        let #panel_ref = #dal.new_panel(#parent, #style);
+                        let #panel_ref = #ctx.new_panel(#parent, #style);
                         #( #children_code; )*
                         #panel_ref
                     }
@@ -304,13 +304,13 @@ fn generate_element(
         }
         ElementType::Checkbox { checked, common } => (
             quote! {
-                #dal.new_checkbox(#parent, #checked)
+                #ctx.new_checkbox(#parent, #checked)
             },
             common,
         ),
         ElementType::TextInput { text, common } => (
             quote! {
-                #dal.new_text_input(#parent, #text.to_string())
+                #ctx.new_text_input(#parent, #text.to_string())
             },
             common,
         ),
@@ -324,10 +324,10 @@ fn generate_element(
 
     let mut common_code = Vec::new();
     if let Some(on_click) = &common.on_click {
-        common_code.push(quote! { #dal.on_click(#element_ident, #on_click); });
+        common_code.push(quote! { #ctx.on_click(#element_ident, #on_click); });
     }
     if let Some(on_hover) = &common.on_hover {
-        common_code.push(quote! { #dal.on_hover(#element_ident, #on_hover); });
+        common_code.push(quote! { #ctx.on_hover(#element_ident, #on_hover); });
     }
 
     if let Some(ident) = binding {

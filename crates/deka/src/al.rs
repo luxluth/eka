@@ -53,7 +53,7 @@ use winit::{
 
 use log::{debug, warn};
 
-use super::{DAL, renderer::gui::GuiRenderer};
+use super::{Context, renderer::gui::GuiRenderer};
 use crate::renderer::{gui::utils::TVertex, shaders};
 
 pub struct Application {
@@ -65,7 +65,7 @@ pub struct Application {
     sampler: Arc<Sampler>,
     rcx: Option<RenderContext>,
     gui_renderer: GuiRenderer,
-    dal: DAL,
+    ctx: Context,
 }
 
 struct RenderContext {
@@ -101,7 +101,7 @@ fn window_size_dependent_setup(
 }
 
 impl Application {
-    pub fn new(event_loop: &EventLoop<()>, dal: DAL) -> Self {
+    pub fn new(event_loop: &EventLoop<()>, ctx: Context) -> Self {
         let library = VulkanLibrary::new().unwrap();
 
         let required_extensions = Surface::required_extensions(event_loop).unwrap();
@@ -211,7 +211,7 @@ impl Application {
             sampler,
             gui_renderer,
             rcx,
-            dal,
+            ctx,
         }
     }
 }
@@ -219,11 +219,11 @@ impl Application {
 impl ApplicationHandler for Application {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         let mut window_attrs = Window::default_attributes()
-            .with_resizable(self.dal.attr.resizable)
-            .with_title(&self.dal.attr.title)
+            .with_resizable(self.ctx.attr.resizable)
+            .with_title(&self.ctx.attr.title)
             .with_inner_size(PhysicalSize::new(
-                self.dal.attr.size.0,
-                self.dal.attr.size.1,
+                self.ctx.attr.size.0,
+                self.ctx.attr.size.1,
             ))
             .with_decorations(false)
             .with_transparent(true);
@@ -231,7 +231,7 @@ impl ApplicationHandler for Application {
         #[cfg(target_os = "linux")]
         {
             use winit::platform::wayland::WindowAttributesExtWayland;
-            window_attrs = window_attrs.with_name(self.dal.attr.app_id.clone(), "");
+            window_attrs = window_attrs.with_name(self.ctx.attr.app_id.clone(), "");
         }
 
         let window = Arc::new(event_loop.create_window(window_attrs).unwrap());
@@ -412,15 +412,15 @@ impl ApplicationHandler for Application {
                 device_id: _,
                 position,
             } => {
-                self.dal.mouse_pos = position;
-                self.dal.update_hover();
+                self.ctx.mouse_pos = position;
+                self.ctx.update_hover();
             }
             WindowEvent::MouseInput {
                 device_id: _,
                 state,
                 button,
             } => {
-                self.dal.click(button, state.is_pressed());
+                self.ctx.click(button, state.is_pressed());
             }
 
             WindowEvent::KeyboardInput {
@@ -428,7 +428,7 @@ impl ApplicationHandler for Application {
                 event,
                 is_synthetic: _,
             } => {
-                self.dal.key_event(crate::events::KeyEvent {
+                self.ctx.key_event(crate::events::KeyEvent {
                     logical_key: event.logical_key,
                     text: event.text,
                     pressed: event.state.is_pressed(),
@@ -437,7 +437,7 @@ impl ApplicationHandler for Application {
 
             WindowEvent::Resized(PhysicalSize { width, height }) => {
                 rcx.recreate_swapchain = true;
-                self.dal.resize(width, height);
+                self.ctx.resize(width, height);
             }
             WindowEvent::RedrawRequested => {
                 let window_size = rcx.window.inner_size();
@@ -497,8 +497,8 @@ impl ApplicationHandler for Application {
                 )
                 .unwrap();
 
-                self.dal.compute_layout();
-                let commands = self.dal.render();
+                self.ctx.compute_layout();
+                let commands = self.ctx.render();
 
                 if commands.is_empty() {
                     debug!("Frame {}: No draw commands generated!", image_index);
@@ -507,7 +507,7 @@ impl ApplicationHandler for Application {
                 self.gui_renderer.upload_draw_commands(
                     image_index as usize,
                     &commands,
-                    &mut self.dal,
+                    &mut self.ctx,
                     &mut builder,
                 );
 
@@ -605,7 +605,7 @@ impl ApplicationHandler for Application {
     }
 
     fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
-        if self.dal.is_dirty() {
+        if self.ctx.is_dirty() {
             let rcx = self.rcx.as_mut().unwrap();
             rcx.window.request_redraw();
             event_loop.set_control_flow(ControlFlow::Poll);

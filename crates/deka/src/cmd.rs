@@ -1,4 +1,4 @@
-use super::DAL;
+use super::Context;
 use super::TextStyle;
 use super::renderer::gui::utils::TVertex;
 use crate::renderer::atlas::{Atlas, TextureUpdate};
@@ -110,7 +110,7 @@ impl DrawCommand {
 
     pub fn to_geometry(
         &self,
-        dal: &mut DAL,
+        ctx: &mut Context,
         atlas: &mut Atlas,
         uploads: &mut Vec<TextureUpdate>,
     ) -> (Vec<TVertex>, Vec<u32>) {
@@ -182,7 +182,7 @@ impl DrawCommand {
                 style,
                 z_index: _,
             } => {
-                let Some(buffer) = dal.get_buffer::<Buffer>(*buffer_ref) else {
+                let Some(buffer) = ctx.get_buffer::<Buffer>(*buffer_ref) else {
                     return (vec![], vec![]);
                 };
                 let buffer = buffer.clone();
@@ -198,9 +198,9 @@ impl DrawCommand {
                         let phys =
                             glyph.physical((space.x as f32, space.y as f32 + run.line_y), 1.0);
 
-                        let image = dal
+                        let image = ctx
                             .swash_cache
-                            .get_image(&mut dal.font_system, phys.cache_key);
+                            .get_image(&mut ctx.font_system, phys.cache_key);
 
                         if let Some(image) = image {
                             if let Some((ax, ay, is_new)) = atlas.allocate(

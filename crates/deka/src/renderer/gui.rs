@@ -1,5 +1,5 @@
 use crate::renderer::atlas::Atlas;
-use crate::{DAL, cmd::DrawCommand};
+use crate::{Context, cmd::DrawCommand};
 use log::debug;
 use std::sync::Arc;
 use vulkano::{
@@ -79,7 +79,7 @@ impl GuiRenderer {
         &mut self,
         image_index: usize,
         draw_commands: &[DrawCommand],
-        dal: &mut DAL,
+        ctx: &mut Context,
         builder: &mut AutoCommandBufferBuilder<PrimaryAutoCommandBuffer>,
     ) {
         let mut all_vertices: Vec<utils::TVertex> = Vec::new();
@@ -87,7 +87,7 @@ impl GuiRenderer {
         let mut uploads = Vec::new();
 
         for cmd in draw_commands {
-            let (vertices, indices) = cmd.to_geometry(dal, &mut self.atlas, &mut uploads);
+            let (vertices, indices) = cmd.to_geometry(ctx, &mut self.atlas, &mut uploads);
             let offset = all_vertices.len() as u32;
 
             all_vertices.extend(vertices);

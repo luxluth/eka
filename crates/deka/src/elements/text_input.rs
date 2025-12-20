@@ -1,6 +1,6 @@
 use super::FrameElement;
 use crate::events::KeyEvent;
-use crate::{DAL, Element, ElementRef, LabelRef};
+use crate::{Context, Element, ElementRef, LabelRef};
 
 /// TextInput component
 pub struct TextInput {
@@ -20,19 +20,19 @@ impl FrameElement for TextInput {
 
 impl TextInput {
     pub(crate) fn new(
-        dal: &mut DAL,
+        ctx: &mut Context,
         parent_frame: Option<impl ElementRef>,
         initial_text: String,
     ) -> Self {
         let parent = if let Some(pf) = parent_frame {
             &heka::Frame::define(pf.raw())
         } else {
-            &dal.root_frame
+            &ctx.root_frame
         };
 
-        let input_frame = dal.root.add_frame_child(parent, None);
+        let input_frame = ctx.root.add_frame_child(parent, None);
 
-        input_frame.update_style(&mut dal.root, |style| {
+        input_frame.update_style(&mut ctx.root, |style| {
             style.width = heka::sizing::SizeSpec::Pixel(200);
             style.height = heka::sizing::SizeSpec::Pixel(30);
             style.padding = heka::sizing::Padding::all(5);
@@ -45,7 +45,7 @@ impl TextInput {
             style.layout = heka::position::LayoutStrategy::Flex;
         });
 
-        let label = dal.new_label(initial_text, Some(Element(input_frame.get_ref())), None);
+        let label = ctx.new_label(initial_text, Some(Element(input_frame.get_ref())), None);
 
         Self {
             frame: input_frame,
@@ -53,7 +53,7 @@ impl TextInput {
         }
     }
 
-    pub fn handle_key(&mut self, dal: &mut DAL, event: &KeyEvent) {
+    pub fn handle_key(&mut self, ctx: &mut Context, event: &KeyEvent) {
         if !event.pressed {
             return;
         }
@@ -61,15 +61,15 @@ impl TextInput {
         use winit::keyboard::Key;
         match &event.logical_key {
             Key::Named(winit::keyboard::NamedKey::Backspace) => {
-                let mut text = dal.get_label_text(self.label).to_string();
+                let mut text = ctx.get_label_text(self.label).to_string();
                 text.pop();
-                dal.set_label_text(self.label, text);
+                ctx.set_label_text(self.label, text);
             }
             _ => {
                 if let Some(text_to_append) = &event.text {
-                    let mut text = dal.get_label_text(self.label).to_string();
+                    let mut text = ctx.get_label_text(self.label).to_string();
                     text.push_str(text_to_append.as_str());
-                    dal.set_label_text(self.label, text);
+                    ctx.set_label_text(self.label, text);
                 }
             }
         }
