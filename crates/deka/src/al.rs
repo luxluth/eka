@@ -413,6 +413,7 @@ impl ApplicationHandler for Application {
                 position,
             } => {
                 self.dal.mouse_pos = position;
+                self.dal.update_hover();
             }
             WindowEvent::MouseInput {
                 device_id: _,
@@ -420,6 +421,18 @@ impl ApplicationHandler for Application {
                 button,
             } => {
                 self.dal.click(button, state.is_pressed());
+            }
+
+            WindowEvent::KeyboardInput {
+                device_id: _,
+                event,
+                is_synthetic: _,
+            } => {
+                self.dal.key_event(crate::events::KeyEvent {
+                    logical_key: event.logical_key,
+                    text: event.text,
+                    pressed: event.state.is_pressed(),
+                });
             }
 
             WindowEvent::Resized(PhysicalSize { width, height }) => {

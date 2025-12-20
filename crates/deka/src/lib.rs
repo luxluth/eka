@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+pub use edl_macro::eka;
 pub use heka;
 use heka::Frame;
 use heka::Style;
@@ -14,7 +15,7 @@ pub use text_style::TextStyle;
 use winit::dpi::PhysicalPosition;
 use winit::event::MouseButton;
 
-use crate::elements::{Button, FrameElement, Label, Panel};
+use crate::elements::{Button, Checkbox, FrameElement, Label, Panel, TextInput};
 
 use cosmic_text::{FontSystem, SwashCache};
 use events::*;
@@ -31,7 +32,8 @@ pub struct DAL {
     root: heka::Root,
     root_frame: heka::Frame,
     elements: HashMap<heka::CapsuleRef, Box<dyn FrameElement>>,
-    callbacks: HashMap<heka::CapsuleRef, Box<dyn FnMut(&mut DAL, &ClickEvent)>>,
+    click_callbacks: HashMap<heka::CapsuleRef, Box<dyn FnMut(&mut DAL, &ClickEvent)>>,
+    hover_callbacks: HashMap<heka::CapsuleRef, Box<dyn FnMut(&mut DAL, &HoverEvent)>>,
 
     pub(crate) attr: WindowAttr,
 
@@ -40,6 +42,10 @@ pub struct DAL {
 
     pub(crate) mouse_pos: PhysicalPosition<f64>,
     pub(crate) mouse_pressed: bool,
+    pub(crate) hovered_element: Option<heka::CapsuleRef>,
+    pub(crate) focused_element: Option<heka::CapsuleRef>,
+
+    pub(crate) keyboard_callbacks: HashMap<heka::CapsuleRef, Box<dyn FnMut(&mut DAL, &KeyEvent)>>,
 }
 
 pub mod events {
@@ -49,6 +55,18 @@ pub mod events {
     pub struct ClickEvent {
         pub pos: PhysicalPosition<f64>,
         pub button: MouseButton,
+    }
+
+    #[derive(Debug, Clone, Copy)]
+    pub struct HoverEvent {
+        pub hovered: bool,
+    }
+
+    #[derive(Debug, Clone)]
+    pub struct KeyEvent {
+        pub logical_key: winit::keyboard::Key,
+        pub text: Option<winit::keyboard::SmolStr>,
+        pub pressed: bool,
     }
 }
 
@@ -111,6 +129,32 @@ impl ElementRef for ButtonRef {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct CheckboxRef(pub(crate) heka::CapsuleRef);
+impl From<CheckboxRef> for Element {
+    fn from(v: CheckboxRef) -> Self {
+        Element(v.0)
+    }
+}
+impl ElementRef for CheckboxRef {
+    fn raw(&self) -> heka::CapsuleRef {
+        self.0
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct TextInputRef(pub(crate) heka::CapsuleRef);
+impl From<TextInputRef> for Element {
+    fn from(v: TextInputRef) -> Self {
+        Element(v.0)
+    }
+}
+impl ElementRef for TextInputRef {
+    fn raw(&self) -> heka::CapsuleRef {
+        self.0
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct WindowAttr {
     pub resizable: bool,
@@ -154,13 +198,17 @@ impl DAL {
             root,
             root_frame,
             elements,
-            callbacks: HashMap::new(),
+            click_callbacks: HashMap::new(),
+            hover_callbacks: HashMap::new(),
             font_system: ft_sys,
             swash_cache: SwashCache::new(),
 
             attr,
             mouse_pos: PhysicalPosition::default(),
             mouse_pressed: false,
+            hovered_element: None,
+            focused_element: None,
+            keyboard_callbacks: HashMap::new(),
         }
     }
 }
@@ -210,10 +258,69 @@ impl DAL {
         PanelRef(new_frame.get_ref())
     }
 
-    pub fn set_label_text(&mut self, element: LabelRef, new_text: String) {
-        self.with_component_mut::<Label>(element.0, |label, dal| {
-            label.set_text(&mut dal.root, &mut dal.font_system, new_text);
+    pub fn new_checkbox(
+        &mut self,
+        parent_frame: Option<impl ElementRef>,
+        initial_checked: bool,
+    ) -> CheckboxRef {
+        let parent = if let Some(pf) = parent_frame {
+            &Frame::define(pf.raw())
+        } else {
+            &self.root_frame
+        };
+
+        let checkbox = Checkbox::new(&mut self.root, Some(parent), initial_checked);
+        let checkbox_ref = checkbox.frame.get_ref();
+
+        self.elements.insert(checkbox_ref, Box::new(checkbox));
+        CheckboxRef(checkbox_ref)
+    }
+
+    pub fn toggle_checkbox(&mut self, element: CheckboxRef) {
+        self.with_component_mut::<Checkbox>(element.0, |checkbox, dal| {
+            checkbox.toggle(&mut dal.root);
         });
+    }
+
+    pub fn new_text_input(
+        &mut self,
+        parent_frame: Option<impl ElementRef>,
+        initial_text: String,
+    ) -> TextInputRef {
+        let text_input = TextInput::new(self, parent_frame, initial_text);
+        let text_input_ref = text_input.frame.get_ref();
+
+        self.keyboard_callbacks.insert(
+            text_input_ref,
+            Box::new(move |dal, event| {
+                dal.with_component_mut::<TextInput>(text_input_ref, |input, dal| {
+                    input.handle_key(dal, event);
+                });
+            }),
+        );
+
+        // focusable on click
+        self.on_click(Element(text_input_ref), move |dal, _| {
+            dal.set_focus(Element(text_input_ref));
+        });
+
+        self.elements.insert(text_input_ref, Box::new(text_input));
+        TextInputRef(text_input_ref)
+    }
+
+    pub fn set_label_text<S: ToString>(&mut self, element: LabelRef, new_text: S) {
+        self.with_component_mut::<Label>(element.0, |label, dal| {
+            label.set_text(&mut dal.root, &mut dal.font_system, new_text.to_string());
+        });
+    }
+
+    pub fn get_label_text(&self, element: LabelRef) -> &str {
+        if let Some(el) = self.elements.get(&element.0) {
+            if let Some(label) = el.as_any().downcast_ref::<Label>() {
+                return label.get_text();
+            }
+        }
+        ""
     }
 
     pub fn set_label_style(&mut self, element: LabelRef, new_style: TextStyle) {
@@ -293,10 +400,28 @@ impl DAL {
             child_label: label_element.into(),
         };
 
-        self.callbacks.insert(button_ref, Box::new(on_click));
+        self.click_callbacks.insert(button_ref, Box::new(on_click));
         self.elements.insert(button_ref, Box::new(button_component));
 
         ButtonRef(button_ref)
+    }
+}
+
+impl DAL {
+    pub fn on_hover<F>(&mut self, element: impl ElementRef, callback: F)
+    where
+        F: FnMut(&mut DAL, &HoverEvent) + 'static,
+    {
+        self.hover_callbacks
+            .insert(element.raw(), Box::new(callback));
+    }
+
+    pub fn on_click<F>(&mut self, element: impl ElementRef, callback: F)
+    where
+        F: FnMut(&mut DAL, &ClickEvent) + 'static,
+    {
+        self.click_callbacks
+            .insert(element.raw(), Box::new(callback));
     }
 }
 
@@ -361,14 +486,70 @@ impl DAL {
             };
 
             for (cref, _) in hit_candidates {
-                if let Some(mut callback) = self.callbacks.remove(&cref) {
+                if let Some(mut callback) = self.click_callbacks.remove(&cref) {
                     callback(self, &event);
-                    self.callbacks.insert(cref, callback);
+                    self.click_callbacks.insert(cref, callback);
 
                     return;
                 }
             }
         }
+    }
+
+    pub(crate) fn update_hover(&mut self) {
+        let hits = self.root.hit_test(
+            self.mouse_pos.x.ceil() as i32,
+            self.mouse_pos.y.ceil() as i32,
+        );
+
+        let mut hit_candidates: Vec<(heka::CapsuleRef, u32)> = hits
+            .into_iter()
+            .filter_map(|cref| {
+                let style = self.root.get_style(cref)?;
+                Some((cref, style.z_index))
+            })
+            .collect();
+
+        hit_candidates.sort_by(|a, b| b.1.cmp(&a.1).then(b.0.cmp(&a.0)));
+
+        // Find the topmost candidate that has a hover callback
+        let best_cref = hit_candidates
+            .iter()
+            .find(|(cref, _)| self.hover_callbacks.contains_key(cref))
+            .map(|(cref, _)| *cref);
+
+        if best_cref != self.hovered_element {
+            // Leave previous
+            if let Some(prev_cref) = self.hovered_element {
+                if let Some(mut callback) = self.hover_callbacks.remove(&prev_cref) {
+                    callback(self, &HoverEvent { hovered: false });
+                    self.hover_callbacks.insert(prev_cref, callback);
+                }
+            }
+
+            // Enter new
+            if let Some(new_cref) = best_cref {
+                if let Some(mut callback) = self.hover_callbacks.remove(&new_cref) {
+                    callback(self, &HoverEvent { hovered: true });
+                    self.hover_callbacks.insert(new_cref, callback);
+                }
+            }
+
+            self.hovered_element = best_cref;
+        }
+    }
+
+    pub(crate) fn key_event(&mut self, event: KeyEvent) {
+        if let Some(focused) = self.focused_element {
+            if let Some(mut callback) = self.keyboard_callbacks.remove(&focused) {
+                callback(self, &event);
+                self.keyboard_callbacks.insert(focused, callback);
+            }
+        }
+    }
+
+    pub fn set_focus(&mut self, element: impl ElementRef) {
+        self.focused_element = Some(element.raw());
     }
 }
 
