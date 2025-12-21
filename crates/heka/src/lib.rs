@@ -448,9 +448,6 @@ impl Root {
             return;
         }
 
-        // We are going to re-compute everything
-        self.dirties.clear();
-
         // 1. Get the screen's dimensions from the root space (space[0])
         let (root_w, root_h) = {
             let root_space = self.spaces[0].unwrap();
@@ -460,19 +457,24 @@ impl Root {
             )
         };
 
-        // 2. Find all top-level capsules (those with no parent)
+        // 2. Find all DIRTY top-level capsules (those with no parent)
         // We must collect them first to avoid borrow-checker issues.
-        let top_level_capsules = self
+        let dirty_top_level_capsules = self
             .capsules
             .iter()
             .enumerate() // Gives us (i, slot)
             .filter_map(|(i, slot)| {
                 slot.capsule.as_ref().and_then(|capsule_data| {
                     if capsule_data.parent_ref.is_none() {
-                        Some(CapsuleRef {
+                        let cref = CapsuleRef {
                             id: i,
                             generation: slot.generation,
-                        })
+                        };
+                        if self.dirties.contains(&cref) {
+                            Some(cref)
+                        } else {
+                            None
+                        }
                     } else {
                         None
                     }
@@ -480,20 +482,19 @@ impl Root {
             })
             .collect::<Vec<_>>();
 
-        // 3. Run Pass 1 (Measure) and Pass 2 (Layout) for each top-level frame.
-        for capsule_ref in top_level_capsules {
+        // 3. Run Pass 1 (Measure) and Pass 2 (Layout) for each dirty top-level frame.
+        for capsule_ref in dirty_top_level_capsules {
             // Start Pass 1: This computes the "desired" size for all nodes
             // in this tree, storing it in their `Space`.
             self.compute_pass_1_measure(capsule_ref);
 
             // Start Pass 2: This gives each node its final position and size,
             // using the root dimensions as the available space.
-            // A top-level node's "given" space is its own desired size,
-            // but it's positioned at (0,0).
-            // (Unless it's `Fill` or `Percent`, in which case it gets root_w/root_h)
-            // Let's simplify and just pass the root size. Pass 2 will resolve it.
             self.compute_pass_2_layout(capsule_ref, 0, 0, root_w, root_h);
         }
+
+        // Clear dirties after compute
+        self.dirties.clear();
     }
 }
 
@@ -607,6 +608,16 @@ impl Root {
                 (given_x + x as i32, given_y + y as i32)
             }
         };
+
+        // if not dirty AND position/size hasn't changed, stop recursion.
+        if !self.dirties.contains(&frame_ref)
+            && space.x == final_x
+            && space.y == final_y
+            && space.width == Some(final_w)
+            && space.height == Some(final_h)
+        {
+            return;
+        }
 
         // 3 - Store My Final Space
         space.x = final_x;
@@ -1000,6 +1011,20 @@ impl Root {
     /// PASS 1 (Bottom-Up): Measure desired content size.
     /// Returns (desired_width, desired_height)
     fn compute_pass_1_measure(&mut self, frame_ref: CapsuleRef) -> (u32, u32) {
+        // if not dirty, reuse cached size.
+        // Since dirty propagates UP, if we are NOT dirty, our children
+        // are definitely NOT dirty, so our content size is stable.
+        if !self.dirties.contains(&frame_ref) {
+            if let Some(space) = self
+                .get_capsule(frame_ref)
+                .and_then(|c| self.spaces[c.space_ref].as_ref())
+            {
+                if let (Some(w), Some(h)) = (space.width, space.height) {
+                    return (w, h);
+                }
+            }
+        }
+
         let (capsule, style) = match self.get_capsule(frame_ref).and_then(|cap| {
             // Chain the getters. Get capsule, then its style.
             let style = self.styles[cap.style_ref].as_ref()?;
