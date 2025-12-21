@@ -1,3 +1,0 @@
-- [] Dirty Propagation: When an element's style or content changes, mark it and its ancestors as "needing measure" or "needing layout".
-- [] Subtree Recomputation: Modify `compute()` to only traverse branches that are actually dirty.
-- [] Cache Validation: Ensure that nodes whose constraints haven't changed aren't re-measured.
