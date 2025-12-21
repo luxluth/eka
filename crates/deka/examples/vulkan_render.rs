@@ -74,6 +74,7 @@ fn main() -> Result<(), impl std::error::Error> {
                             on_click: move |ctx, _| {
                                 count += 1;
                                 ctx.set_label_text(count_label, format!("Count = {count}"));
+                                ctx.set_title(format!("Count = {count}"));
                             },
                             style: TextStyle {
                                 font_size: 14.0,

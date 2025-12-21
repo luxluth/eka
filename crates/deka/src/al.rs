@@ -54,6 +54,7 @@ use winit::{
 use log::{debug, warn};
 
 use super::{Context, renderer::gui::GuiRenderer};
+use crate::events::{SystemEvent, WindowCommand};
 use crate::renderer::{gui::utils::TVertex, shaders};
 
 pub struct Application {
@@ -66,6 +67,9 @@ pub struct Application {
     rcx: Option<RenderContext>,
     gui_renderer: GuiRenderer,
     ctx: Context,
+
+    last_click: Option<(winit::dpi::PhysicalPosition<f64>, winit::event::MouseButton)>,
+    last_click_time: std::time::Instant,
 }
 
 struct RenderContext {
@@ -212,6 +216,8 @@ impl Application {
             gui_renderer,
             rcx,
             ctx,
+            last_click: None,
+            last_click_time: std::time::Instant::now(),
         }
     }
 }
@@ -412,15 +418,37 @@ impl ApplicationHandler for Application {
                 device_id: _,
                 position,
             } => {
-                self.ctx.mouse_pos = position;
-                self.ctx.update_hover();
+                self.ctx.process_event(SystemEvent::CursorMoved(position));
             }
             WindowEvent::MouseInput {
                 device_id: _,
                 state,
                 button,
             } => {
-                self.ctx.click(button, state.is_pressed());
+                let mut double_click = false;
+                if state.is_pressed() {
+                    let now = std::time::Instant::now();
+                    if let Some((last_pos, last_button)) = self.last_click {
+                        if last_button == button
+                            && now.duration_since(self.last_click_time).as_millis() < 500
+                        {
+                            let dx = last_pos.x - self.ctx.mouse_pos.x;
+                            let dy = last_pos.y - self.ctx.mouse_pos.y;
+                            if (dx * dx + dy * dy).sqrt() < 5.0 {
+                                double_click = true;
+                            }
+                        }
+                    }
+                    self.last_click = Some((self.ctx.mouse_pos, button));
+                    self.last_click_time = now;
+                }
+
+                self.ctx.process_event(SystemEvent::Click {
+                    pos: self.ctx.mouse_pos,
+                    button,
+                    pressed: state.is_pressed(),
+                    double_click,
+                });
             }
 
             WindowEvent::KeyboardInput {
@@ -428,7 +456,7 @@ impl ApplicationHandler for Application {
                 event,
                 is_synthetic: _,
             } => {
-                self.ctx.key_event(crate::events::KeyEvent {
+                self.ctx.process_event(SystemEvent::Keyboard {
                     logical_key: event.logical_key,
                     text: event.text,
                     pressed: event.state.is_pressed(),
@@ -437,7 +465,7 @@ impl ApplicationHandler for Application {
 
             WindowEvent::Resized(PhysicalSize { width, height }) => {
                 rcx.recreate_swapchain = true;
-                self.ctx.resize(width, height);
+                self.ctx.process_event(SystemEvent::Resize(width, height));
             }
             WindowEvent::RedrawRequested => {
                 let window_size = rcx.window.inner_size();
@@ -605,6 +633,52 @@ impl ApplicationHandler for Application {
     }
 
     fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
+        let commands: Vec<WindowCommand> = self.ctx.commands.drain(..).collect();
+        for cmd in commands {
+            match cmd {
+                WindowCommand::SetTitle(title) => {
+                    if let Some(rcx) = &self.rcx {
+                        rcx.window.set_title(&title);
+                    }
+                }
+                WindowCommand::SetSize(width, height) => {
+                    if let Some(rcx) = &self.rcx {
+                        let _ = rcx
+                            .window
+                            .request_inner_size(PhysicalSize::new(width, height));
+                    }
+                }
+                WindowCommand::SetResizable(resizable) => {
+                    if let Some(rcx) = &self.rcx {
+                        rcx.window.set_resizable(resizable);
+                    }
+                }
+                WindowCommand::SetDecorations(decorations) => {
+                    if let Some(rcx) = &self.rcx {
+                        rcx.window.set_decorations(decorations);
+                    }
+                }
+                WindowCommand::Maximize => {
+                    if let Some(rcx) = &self.rcx {
+                        rcx.window.set_maximized(true);
+                    }
+                }
+                WindowCommand::Minimize => {
+                    if let Some(rcx) = &self.rcx {
+                        rcx.window.set_minimized(true);
+                    }
+                }
+                WindowCommand::DragWindow => {
+                    if let Some(rcx) = &self.rcx {
+                        let _ = rcx.window.drag_window();
+                    }
+                }
+                WindowCommand::Quit => {
+                    event_loop.exit();
+                }
+            }
+        }
+
         if self.ctx.is_dirty() {
             let rcx = self.rcx.as_mut().unwrap();
             rcx.window.request_redraw();

@@ -18,6 +18,7 @@ use winit::event::MouseButton;
 use crate::elements::{Button, Checkbox, FrameElement, Label, Panel, TextInput};
 
 use cosmic_text::{FontSystem, SwashCache};
+pub mod events;
 use events::*;
 use heka::{layout, size, style};
 
@@ -47,28 +48,8 @@ pub struct Context {
 
     pub(crate) keyboard_callbacks:
         HashMap<heka::CapsuleRef, Box<dyn FnMut(&mut Context, &KeyEvent)>>,
-}
 
-pub mod events {
-    use winit::{dpi::PhysicalPosition, event::MouseButton};
-
-    #[derive(Debug, Clone, Copy)]
-    pub struct ClickEvent {
-        pub pos: PhysicalPosition<f64>,
-        pub button: MouseButton,
-    }
-
-    #[derive(Debug, Clone, Copy)]
-    pub struct HoverEvent {
-        pub hovered: bool,
-    }
-
-    #[derive(Debug, Clone)]
-    pub struct KeyEvent {
-        pub logical_key: winit::keyboard::Key,
-        pub text: Option<winit::keyboard::SmolStr>,
-        pub pressed: bool,
-    }
+    pub(crate) commands: Vec<WindowCommand>,
 }
 
 pub trait ElementRef: Copy + Into<Element> {
@@ -210,11 +191,56 @@ impl Context {
             hovered_element: None,
             focused_element: None,
             keyboard_callbacks: HashMap::new(),
+            commands: Vec::new(),
         }
     }
 }
 
 impl Context {
+    pub fn set_title(&mut self, title: impl Into<String>) {
+        let title = title.into();
+        self.attr.title = title.clone();
+        self.push_command(WindowCommand::SetTitle(title));
+    }
+
+    pub fn push_command(&mut self, cmd: WindowCommand) {
+        self.commands.push(cmd);
+    }
+
+    pub fn process_event(&mut self, event: SystemEvent) {
+        match event {
+            SystemEvent::Click {
+                pos: _,
+                button,
+                pressed,
+                double_click,
+            } => {
+                self.click(button, pressed, double_click);
+            }
+            SystemEvent::CursorMoved(pos) => {
+                self.mouse_pos = pos;
+                self.update_hover();
+            }
+            SystemEvent::Keyboard {
+                logical_key,
+                text,
+                pressed,
+            } => {
+                self.key_event(KeyEvent {
+                    logical_key,
+                    text,
+                    pressed,
+                });
+            }
+            SystemEvent::Resize(w, h) => {
+                self.resize(w, h);
+            }
+            SystemEvent::RequestRedraw => {
+                // Handled by loop or ignored here if not needed
+            }
+        }
+    }
+
     pub fn new_label<S: ToString>(
         &mut self,
         text: S,
@@ -454,7 +480,7 @@ impl Context {
 }
 
 impl Context {
-    pub(crate) fn click(&mut self, mouse_button: MouseButton, pressed: bool) {
+    pub(crate) fn click(&mut self, mouse_button: MouseButton, pressed: bool, double_click: bool) {
         if pressed {
             self.mouse_pressed = true;
             return;
@@ -484,6 +510,7 @@ impl Context {
             let event = ClickEvent {
                 pos: self.mouse_pos,
                 button: mouse_button,
+                double_click,
             };
 
             for (cref, _) in hit_candidates {
